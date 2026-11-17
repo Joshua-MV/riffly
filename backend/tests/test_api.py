@@ -156,20 +156,6 @@ def test_workers_start_on_demand_and_stop_when_idle(tmp_path):
         assert not store.executor_running  # memory released after the idle period
 
 
-def test_serves_built_web_app_with_spa_fallback(tmp_path):
-    dist = tmp_path / "dist"
-    (dist / "_expo").mkdir(parents=True)
-    (dist / "index.html").write_text("<html>riffly</html>")
-    (dist / "_expo" / "app.js").write_text("console.log(1)")
-    with TestClient(create_app(_settings(tmp_path, app_dir=dist))) as c:
-        assert c.get("/").text == "<html>riffly</html>"
-        assert c.get("/song/abc").text == "<html>riffly</html>"  # client-side route
-        assert c.get("/_expo/app.js").text == "console.log(1)"
-        assert c.get("/../secrets.txt").text == "<html>riffly</html>"  # no path escape
-        assert c.get("/api/nope").status_code == 404
-        assert c.get("/api/health").json()["status"] == "ok"
-
-
 def test_state_is_wiped_on_startup(tmp_path):
     leftover = tmp_path / "work" / "old-job"
     leftover.mkdir(parents=True)

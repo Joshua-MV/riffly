@@ -1,5 +1,33 @@
 # Audio engine
 
+## C++ engine (shipping, `engine/`)
+
+The apps analyse songs on the device with a C++ port of the pipeline below. It is exposed as a
+plain C API (`engine/include/riffly/engine.h`), compiled into the Windows app through Rust
+(`frontend/src-tauri/build.rs`), and planned for Android through JNI.
+
+Differences from the Python reference:
+- **Chroma:** from a 16384-point STFT (1.35 Hz bins) instead of a CQT, with triangular semitone
+  weighting normalised per semitone so each octave counts equally. Log compression and a
+  9-frame median filter follow, as before. There's no HPSS; the time median does the same job
+  cheaply.
+- **Chord-change timing:** refined with a 4096-point "what is ringing" chroma. A fixed-window
+  change-point search within ±0.7 s of each HMM boundary picks the split, then boundaries are
+  snapped to a beat only if one is within 0.12 s. Parameters were chosen with
+  `engine/tools/tune.py` over 7 synthetic songs. An attack-based variant was tried and
+  rejected: 90.5% versus 99.0%.
+- **Beats:** onset strength as librosa computes it (128-band Slaney mel, dB, 80 dB floor,
+  positive difference, two-frame centring delay). On test audio it matches librosa's onset
+  curve at r = 0.99999. Then tempo by autocorrelation with a log-normal prior around 120 BPM,
+  and Ellis's dynamic-programming beat tracker with librosa's trimming.
+- **MP3 decoding** uses minimp3 (CC0), **WAV** uses dr_wav (public domain). M4A isn't
+  supported yet.
+
+Measured on a 258 s synthetic song: chord accuracy 98.8% (Python 99.0%), 1.6 s versus 28.6 s,
+and 60 MB peak memory.
+
+## Python reference engine (`backend/app/audio/`)
+
 Source: `backend/app/audio/`. Engine id: `riffly-dsp-0.1.0+template-hmm-0.1.0`. This id is
 stored with every analysis, so results can be traced to the engine version that produced them.
 

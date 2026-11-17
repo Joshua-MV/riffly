@@ -1,14 +1,15 @@
 {
   "name": "riffly-workspace",
   "private": true,
-  "description": "Riffly: run `npm run dev` to set up (first time) and start the app.",
+  "description": "Riffly: run `npm run dev` to open the app (it builds itself the first time).",
   "scripts": {
-    "dev": "node scripts/dev.mjs --start",
-    "start": "node scripts/dev.mjs --start",
-    "dev:live": "node scripts/dev.mjs",
-    "desktop": "node scripts/dev.mjs --desktop",
-    "desktop:build": "npm --prefix frontend exec tauri build",
-    "setup": "node scripts/dev.mjs --setup-only"
+    "dev": "node scripts/dev.mjs open",
+    "start": "node scripts/dev.mjs open",
+    "build": "node scripts/dev.mjs build",
+    "dev:live": "node scripts/dev.mjs live",
+    "transcribe-server": "node scripts/dev.mjs transcribe-server",
+    "setup": "node scripts/dev.mjs setup",
+    "test": "npm --prefix frontend test && cmd /c engine\\build.cmd"
   },
   "engines": {
     "node": ">=20"

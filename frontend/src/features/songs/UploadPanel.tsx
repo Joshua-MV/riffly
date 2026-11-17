@@ -10,6 +10,7 @@ import { Text } from '@/components/ui/Text';
 import { config } from '@/config';
 import { startImport } from '@/features/library/importer';
 import type { UploadSource } from '@/services/api';
+import { localEngine } from '@/services/localEngine';
 import { useTheme } from '@/theme/ThemeProvider';
 import { radius, spacing } from '@/theme/tokens';
 
@@ -100,7 +101,9 @@ export function UploadPanel() {
       </Text>
       <Button label={Platform.OS === 'web' ? 'Browse files' : 'Choose file'} icon="folder-open" onPress={pick} size="lg" />
       <Text variant="caption" tone="subtle" align="center">
-        Saved on this device as MP3. The analysis server deletes its copy as soon as it's done.
+        {localEngine.available()
+          ? 'Analysed on this PC by the built-in engine and saved as MP3. Nothing is uploaded.'
+          : "Saved on this device as MP3. The analysis server deletes its copy as soon as it's done."}
       </Text>
       {error && (
         <View style={{ alignSelf: 'stretch' }}>

@@ -5,11 +5,9 @@ import secrets
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
-from pathlib import Path
-
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import JSONResponse
 
 from .audio import transcribe
 from .audio.pipeline import ENGINE_VERSION
@@ -78,26 +76,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             "transcription_available": transcribe.available(),
         }
 
-    if settings.app_dir and (settings.app_dir / "index.html").exists():
-        mount_web_app(app, settings.app_dir)
-
     return app
-
-
-def mount_web_app(app: FastAPI, app_dir: Path) -> None:
-    """Serve the exported web app. Unknown paths (e.g. /song/123) get index.html so the
-    client-side router can handle them, like any single-page app."""
-    root = app_dir.resolve()
-    index = root / "index.html"
-
-    @app.get("/{path:path}", include_in_schema=False)
-    def web_app(path: str) -> FileResponse:
-        if path.startswith("api/"):
-            raise HTTPException(status_code=404, detail="Not found")
-        candidate = (root / path).resolve()
-        if path and candidate.is_file() and candidate.is_relative_to(root):
-            return FileResponse(candidate)
-        return FileResponse(index, headers={"Cache-Control": "no-cache"})
 
 
 app = create_app()  # uvicorn app.main:app

@@ -7,6 +7,7 @@
 import { useSyncExternalStore } from 'react';
 
 import { api, uploadForAnalysis, type UploadSource } from '@/services/api';
+import { localEngine } from '@/services/localEngine';
 
 import { createSong } from './model';
 import { storage } from './storage';
@@ -44,8 +45,27 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 export function startImport(source: UploadSource, onSaved: (songId: string) => void): string {
   const id = `import-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
   const title = source.name.replace(/\.[^.]+$/, '');
-  tasks = [{ id, name: source.name, phase: 'uploading', progress: 0, error: null, songId: null }, ...tasks];
+  const onDevice = localEngine.available();
+  tasks = [{ id, name: source.name, phase: onDevice ? 'analysing' : 'uploading', progress: 0, error: null, songId: null }, ...tasks];
   emit();
+
+  if (onDevice) {
+    // Built-in C++ engine: analyse and convert on this device. Nothing is uploaded.
+    void (async () => {
+      try {
+        const bytes = await localEngine.readBytes(source);
+        const [analysis, mp3] = await Promise.all([localEngine.analyze(bytes), localEngine.toMp3(bytes)]);
+        update(id, { phase: 'saving' });
+        const song = createSong({ title, originalFilename: source.name, audioBytes: mp3.byteLength, analysis });
+        await storage.add(song, mp3);
+        update(id, { phase: 'done', songId: song.id });
+        onSaved(song.id);
+      } catch (e) {
+        update(id, { phase: 'failed', error: e instanceof Error ? e.message : String(e) || 'Import failed.' });
+      }
+    })();
+    return id;
+  }
 
   void (async () => {
     let jobId: string | null = null;

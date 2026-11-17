@@ -15,6 +15,7 @@ name = "riffly_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]
+cc = "1.11.2"
 tauri-build = { version = "2.7.5", features = [] }
 
 [dependencies]
@@ -26,3 +27,4 @@ tauri-plugin-log = "2"
 tauri-plugin-sql = { version = "2", features = ["sqlite"] }
 tauri-plugin-fs = "2"
 tauri-plugin-dialog = "2"
+mp3lame-encoder = "0.3.0"
