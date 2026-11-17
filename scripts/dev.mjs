@@ -1,11 +1,15 @@
 #!/usr/bin/env node
 /**
- * `npm run dev`: one command to run Riffly locally.
+ * One command to run Riffly locally.
  *
- *  1. First run (or after dependencies change): installs the app's npm packages and creates
- *     the Python environment for the analysis server.
- *  2. Starts the analysis server (http://localhost:8000) and the app (http://localhost:8081).
- *  3. Opens the app in your browser. Ctrl+C stops both.
+ *  `npm run dev` (or `npm start`), lightweight, `--start`:
+ *    first run installs dependencies and builds the app; then one Python process serves the
+ *    built app and the API at http://localhost:8000.
+ *  `npm run dev:live`, for editing code:
+ *    the analysis server (http://localhost:8000) plus Expo's live-reload dev server
+ *    (http://localhost:8081).
+ *
+ *  Both open the app in your browser; Ctrl+C stops everything.
  *
  * No extra dependencies: plain Node.js.
  */
@@ -25,7 +29,7 @@ const API_PORT = 8000;
 const APP_PORT = 8081;
 const APP_URL = `http://localhost:${APP_PORT}`;
 const setupOnly = process.argv.includes('--setup-only');
-// `npm start`: lightweight mode for using the app. One Python process serves the pre-built app
+// `npm run dev` / `npm start`: lightweight mode for using the app. One Python process serves the pre-built app
 // and the API; no development bundler (which alone uses ~900 MB of RAM).
 const lean = process.argv.includes('--start');
 const dist = path.join(frontend, 'dist');
@@ -67,20 +71,20 @@ function findPython() {
 
 function setup() {
   if (!existsSync(path.join(frontend, 'node_modules'))) {
-    say('Installing app packages (first run only, a few minutes)…');
+    say('Installing app packages (first run only, a few minutes)...');
     run('npm', ['install'], frontend);
   }
 
   if (!existsSync(venvPython)) {
     const py = findPython();
     if (!py) fail('Python 3.11+ is needed for the analysis server. Install it from https://www.python.org/downloads/ and run `npm run dev` again.');
-    say('Creating the Python environment for the analysis server…');
+    say('Creating the Python environment for the analysis server...');
     run(py[0], [...py[1], '-m', 'venv', path.join(backend, '.venv')], root);
   }
   // Cheap check that the server's packages are present (also catches newly added ones).
   const check = spawnSync(venvPython, ['-c', 'import fastapi, librosa, lameenc, multipart'], { cwd: backend });
   if (check.status !== 0) {
-    say('Installing analysis-server packages (first run only, can take several minutes)…');
+    say('Installing analysis-server packages (first run only, can take several minutes)...');
     run(venvPython, ['-m', 'pip', 'install', '--disable-pip-version-check', '-q', '-r', 'requirements.txt'], backend);
   }
 }
@@ -102,7 +106,7 @@ function buildIfNeeded() {
   const sources = ['app', 'src', 'assets'].map((d) => path.join(frontend, d)).filter(existsSync);
   const sourceTime = Math.max(...sources.map(newestMtime), ...['package.json', 'app.json'].map((f) => statSync(path.join(frontend, f)).mtimeMs));
   if (existsSync(index) && statSync(index).mtimeMs >= sourceTime) return;
-  say('Building the app (only when its code has changed, about a minute)…');
+  say('Building the app (only when its code has changed, about a minute)...');
   run('npx', ['expo', 'export', '--platform', 'web', '--output-dir', 'dist'], frontend);
 }
 
@@ -186,7 +190,7 @@ function stopAll(code = 0) {
   process.exit(code);
 }
 process.on('SIGINT', () => {
-  say('Stopping…');
+  say('Stopping...');
   stopAll(0);
 });
 process.on('SIGTERM', () => stopAll(0));
@@ -204,12 +208,12 @@ async function main() {
   if (lean) {
     buildIfNeeded();
     if (!(await portFree(API_PORT))) fail(`Port ${API_PORT} is already in use. Is Riffly already running in another window? Close it and try again.`);
-    say('Starting Riffly…');
+    say('Starting Riffly...');
     start('riffly', '36', venvPython, ['-m', 'uvicorn', 'app.main:app', '--port', String(API_PORT)], backend, { APP_DIR: dist });
     const url = `http://localhost:${API_PORT}`;
     if (!(await waitFor(`${url}/api/health`, 120_000))) fail('Riffly did not start. Check the lines above.');
     console.log('');
-    say(color('1;32', `Riffly is running → ${url}`));
+    say(color('1;32', `Riffly is running at ${url}`));
     if (!process.env.RIFFLY_NO_OPEN) openBrowser(url);
     say('Press Ctrl+C here to stop.');
     console.log('');
@@ -222,7 +226,7 @@ async function main() {
     }
   }
 
-  say('Starting the analysis server and the app…');
+  say('Starting the analysis server and the app...');
   start('api', '36', venvPython, ['-m', 'uvicorn', 'app.main:app', '--port', String(API_PORT)], backend);
   // BROWSER=none: we open the browser ourselves once the app has finished bundling.
   start('app', '33', 'npx', ['expo', 'start', '--web', '--port', String(APP_PORT)], frontend, { BROWSER: 'none' });
@@ -237,7 +241,7 @@ async function main() {
   // Load the page once so the first visit isn't spent waiting for the bundle.
   await waitFor(`${APP_URL}/`, 60_000);
   console.log('');
-  say(color('1;32', `Riffly is running → ${APP_URL}`));
+  say(color('1;32', `Riffly is running at ${APP_URL}`));
   if (process.env.RIFFLY_NO_OPEN) say('Press Ctrl+C here to stop.');
   else {
     say('Opening your browser. Press Ctrl+C here to stop.');

@@ -71,25 +71,28 @@ Requirements: Node.js 20+ and Python 3.11+. FFmpeg is optional (needed only for 
 From the project folder:
 
 ```bash
-npm start
+npm run dev
 ```
 
 That's it. The first run installs everything it needs and builds the app, which takes a few
 minutes. After that it starts in seconds, opens **http://localhost:8000** in your browser, and
-Ctrl+C stops it.
+Ctrl+C stops it. `npm start` does exactly the same.
+
+In Windows PowerShell, if you see "running scripts is disabled", type `npm.cmd run dev`
+instead, or use Command Prompt.
 
 | Command | Use it for | What runs |
 |---|---|---|
-| `npm start` | **Using** Riffly | One Python process serves the built app and the analysis API. The app is rebuilt automatically only when its code has changed |
-| `npm run dev` | **Editing** Riffly's code | The analysis server plus Expo's live-reload dev server (http://localhost:8081) |
+| `npm run dev` (or `npm start`) | **Using** Riffly | One Python process serves the built app and the analysis API. The app is rebuilt automatically only when its code has changed |
+| `npm run dev:live` | **Editing** Riffly's code | The analysis server plus Expo's live-reload dev server (http://localhost:8081), about 1 GB of RAM |
 | `npm run setup` | Installing without starting | Same first-run setup, then exits |
 
-Songs are stored per browser *address*, so songs saved under `npm start` (localhost:8000)
-are a separate library from those saved under `npm run dev` (localhost:8081).
+Songs are stored per browser *address*, so songs saved under `npm run dev` (localhost:8000)
+are a separate library from those saved under `npm run dev:live` (localhost:8081).
 
 ### Memory use (measured on Windows)
 
-| | Before | `npm start` now |
+| | Before | `npm run dev` now |
 |---|---|---|
 | Idle | ~1.1 GB (Expo dev bundler 933 MB, Python 86 MB, npx 78 MB) | **~190 MB** (Python 87 MB, Node launcher ~106 MB) |
 | While analysing a song | +2 worker processes, ~370 MB each, kept in memory afterwards | +1 worker, 258 MB peak, which **exits after 5 idle minutes** |
