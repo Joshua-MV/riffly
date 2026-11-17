@@ -1,0 +1,47 @@
+{
+  "expo": {
+    "name": "Riffly",
+    "slug": "riffly",
+    "scheme": "riffly",
+    "version": "0.1.0",
+    "orientation": "default",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "automatic",
+    "backgroundColor": "#171827",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "app.riffly",
+      "infoPlist": {
+        "NSMicrophoneUsageDescription": "Riffly uses the microphone to hear your guitar while tuning. Audio is analysed on your device and never recorded or uploaded."
+      }
+    },
+    "android": {
+      "package": "app.riffly",
+      "adaptiveIcon": {
+        "backgroundColor": "#171827",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "permissions": ["android.permission.RECORD_AUDIO"]
+    },
+    "web": {
+      "favicon": "./assets/favicon.png",
+      "output": "single",
+      "bundler": "metro"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-font",
+      [
+        "expo-audio",
+        {
+          "microphonePermission": "Riffly uses the microphone to hear your guitar while tuning. Audio is analysed on your device and never recorded or uploaded."
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": false
+    }
+  }
+}

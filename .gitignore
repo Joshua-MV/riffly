@@ -1,0 +1,24 @@
+# Dependencies & builds
+node_modules/
+frontend/.expo/
+frontend/dist/
+frontend/web-build/
+frontend/ios/
+frontend/android/
+frontend/expo-env.d.ts
+
+# Python
+backend/.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Local data (uploaded audio, SQLite) and secrets
+backend/data/
+.env
+*.env.local
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/

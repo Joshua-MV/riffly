@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "riffly-web",
+      "runtimeExecutable": "cmd",
+      "runtimeArgs": ["/c", "set PATH=C:\\Program Files\\nodejs;%PATH% && cd frontend && npx expo start --web --port 8081"],
+      "port": 8081
+    },
+    {
+      "name": "riffly-api",
+      "runtimeExecutable": "cmd",
+      "runtimeArgs": ["/c", "cd backend && .venv\\Scripts\\python.exe -m uvicorn app.main:app --port 8000"],
+      "port": 8000
+    }
+  ]
+}

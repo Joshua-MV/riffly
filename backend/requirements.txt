@@ -1,0 +1,8 @@
+fastapi[standard]>=0.115,<1
+pydantic-settings>=2.6,<3
+python-multipart>=0.0.12
+PyJWT[crypto]>=2.9,<3
+librosa>=0.10.2,<0.12
+numpy>=1.26,<3
+scipy>=1.13,<2
+soundfile>=0.12
