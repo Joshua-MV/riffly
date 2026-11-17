@@ -72,6 +72,9 @@ you move around the app, and a mini player shows the current chord on every scre
 
 | Feature | What it does |
 |---|---|
+| **Chord lane** | Chord blocks scroll under a playhead. Each block's width is how long to hold the chord, with beat ticks inside. The current chord fills up and shows "3 beats left", and the next chord sits right beside it. Key, tempo, capo and length are shown underneath. Tap a block to jump there. |
+| **Player** | Spotify-style: drag the seek bar anywhere (backwards or forwards), a big play/pause button, ⏮ ⏭ to jump between chord changes (⏮ restarts the current chord first), loop, speed (pitch kept) and count-in. |
+| **Lyrics** | Paste the song's words (or import a .txt or synced .lrc file); chords appear above the words and the sheet auto-scrolls with the song, following capo and key settings. Tap **Sync** and tap along once (or press Space) to time each line. Riffly never downloads lyrics, because they're copyrighted. |
 | **Make it easier** | Tries every capo position and suggests the one with the easiest shapes, e.g. Ab–Eb–Fm–Db becomes *capo 1: G–D–Em–C, no barre chords*. The recording stays in its real key, so you can still play along. |
 | **Chords** | A timeline synced to playback, with the current and next chords plus a diagram, a loop for the current phrase, speeds of 0.5–1× that keep the pitch, and corrections. |
 | **Fingerpicking tab** | Generated from the song's chords and beat in three patterns (simple arpeggio, pinch, Travis). It scrolls in sync and highlights the note to play now. It is an *arrangement* in the song's style, not a note-for-note copy. |

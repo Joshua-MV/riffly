@@ -12,7 +12,8 @@ import { usePlayer } from '@/features/player/PlayerProvider';
 import { CapoCard } from '@/features/songs/components/CapoCard';
 import { ChordList, CorrectionEditor } from '@/features/songs/components/ChordList';
 import { LearnPanel } from '@/features/songs/components/LearnPanel';
-import { NowPlaying } from '@/features/songs/components/NowPlaying';
+import { LyricsPanel } from '@/features/songs/components/LyricsPanel';
+import { PlayerStage } from '@/features/songs/components/PlayerStage';
 import { TranscribePanel } from '@/features/songs/components/TranscribePanel';
 import { useExportMp3, useSong, useUpdateSong } from '@/features/songs/hooks';
 import { beatInBar, practiceTab, practiceTimeline } from '@/features/songs/practice';
@@ -24,7 +25,7 @@ import { useLayout } from '@/theme/useLayout';
 import { spacing } from '@/theme/tokens';
 
 const SPEEDS = [0.5, 0.75, 0.9, 1] as const;
-type Panel = 'chords' | 'tab' | 'learn' | 'transcribe';
+type Panel = 'chords' | 'lyrics' | 'tab' | 'learn' | 'transcribe';
 
 export default function SongScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -122,48 +123,52 @@ function Practice({ song }: { song: LocalSong }) {
     player.setLoop({ start: current.start, end });
   };
 
-  const nowPlaying = <NowPlaying current={current} next={next} large={focus} beat={beat} countIn={countIn} capo={practice.capo} />;
+  const confTone = (c: number | null) => (c === null ? undefined : c > 0.6 ? ('success' as const) : c > 0.3 ? ('highlight' as const) : ('danger' as const));
+  const info = [
+    { label: 'Key', value: shapeKey ? `${soundingKey} · ${shapeKey}` : soundingKey, tone: confTone(result.key_confidence) },
+    { label: 'Tempo', value: result.bpm ? `${Math.round(result.bpm * player.rate)} BPM${player.rate !== 1 ? ` at ${player.rate}×` : ''}` : '—', tone: confTone(result.bpm_confidence) },
+    { label: 'Capo', value: practice.capo ? `fret ${practice.capo}` : 'none' },
+    { label: 'Length', value: formatTime(result.duration) },
+  ];
 
-  const transport = (
-    <Card style={{ gap: spacing.md }}>
-      {!isLoaded && player.song && (
-        <Notice tone="info">{`Now playing “${player.song.title}”. Press play to switch to this song.`}</Notice>
-      )}
-      {player.error && isLoaded && <Notice tone="error">{player.error}</Notice>}
-      <Waveform peaks={result.waveform} duration={duration} currentTime={time} loop={isLoaded ? player.loop : null} markers={changes} onSeek={(t) => void seek(t)} height={focus ? 88 : 64} />
-      <View style={styles.timeRow}>
-        <Text variant="caption" tone="muted">{formatTime(time)}</Text>
-        <Text variant="caption" tone="muted">{formatTime(duration)}</Text>
-      </View>
-      <View style={styles.transport}>
-        <IconButton icon="play-back" label="Back 5 seconds" size={focus ? 60 : 48} onPress={() => void seek(time - 5)} />
-        <IconButton
-          icon={isLoaded && (player.playing || player.countingIn) ? 'pause' : 'play'}
-          label={isLoaded && player.playing ? 'Pause' : 'Play'}
-          tone="accent"
-          size={focus ? 84 : 64}
-          onPress={() => void toggle()}
-        />
-        <IconButton icon="play-forward" label="Forward 5 seconds" size={focus ? 60 : 48} onPress={() => void seek(time + 5)} />
-      </View>
-      <View style={styles.controlsWrap}>
-        <ControlGroup label="Speed (pitch stays the same)">
-          {SPEEDS.map((s) => (
-            <Chip key={s} label={`${s}×`} selected={player.rate === s} onPress={() => player.setRate(s)} />
-          ))}
-        </ControlGroup>
-        <ControlGroup label="Loop">
-          {isLoaded && player.loop ? (
-            <Chip icon="close" label={`${formatTime(player.loop.start)}–${formatTime(player.loop.end)}`} selected onPress={() => player.setLoop(null)} />
-          ) : (
-            <Chip icon="repeat" label="Loop this phrase" onPress={loopPhrase} />
-          )}
-        </ControlGroup>
-        <ControlGroup label="Count-in">
-          <Chip icon="timer-outline" label={practice.countIn ? '1 bar' : 'Off'} selected={practice.countIn} onPress={() => setPractice({ countIn: !practice.countIn })} />
-        </ControlGroup>
-      </View>
-    </Card>
+  const stage = (
+    <PlayerStage
+      timeline={timeline}
+      beats={beats}
+      time={time}
+      duration={duration}
+      playing={isLoaded && player.playing}
+      rate={player.rate}
+      loop={isLoaded ? player.loop : null}
+      countIn={countIn}
+      countInEnabled={practice.countIn}
+      beat={beat}
+      capo={practice.capo}
+      info={info}
+      large={focus}
+      notice={!isLoaded && player.song ? `Now playing “${player.song.title}”. Press play to switch to this song.` : null}
+      error={isLoaded ? player.error : null}
+      onToggle={() => void toggle()}
+      onSeek={(t) => void seek(t)}
+      onRate={player.setRate}
+      onLoopToggle={() => (isLoaded && player.loop ? player.setLoop(null) : loopPhrase())}
+      onCountInToggle={() => setPractice({ countIn: !practice.countIn })}
+    />
+  );
+
+  const lyricsPanel = (
+    <LyricsPanel
+      song={song}
+      timeline={timeline}
+      time={time}
+      playing={isLoaded && player.playing}
+      onSeek={(t) => void seek(t)}
+      onPlayFrom={(t) => void (async () => {
+        await seek(t);
+        if (!player.playing) player.play();
+      })()}
+      large={focus}
+    />
   );
 
   const tabPanel = (
@@ -184,17 +189,17 @@ function Practice({ song }: { song: LocalSong }) {
     return (
       <Screen maxWidth={1200}>
         <BackBar>
-          <SegmentedControl<'chords' | 'tab'>
+          <SegmentedControl<'chords' | 'lyrics' | 'tab'>
             label="Play-along view"
-            value={panel === 'tab' ? 'tab' : 'chords'}
+            value={panel === 'tab' || panel === 'lyrics' ? panel : 'chords'}
             onChange={(v) => setPanel(v)}
-            options={[{ value: 'chords', label: 'Chords' }, { value: 'tab', label: 'Tab' }]}
+            options={[{ value: 'chords', label: 'Chords' }, { value: 'lyrics', label: 'Lyrics' }, { value: 'tab', label: 'Tab' }]}
           />
           <Button label="Exit" variant="secondary" icon="contract" onPress={() => setFocus(false)} />
         </BackBar>
-        {nowPlaying}
+        {stage}
+        {panel === 'lyrics' && lyricsPanel}
         {panel === 'tab' && tabPanel}
-        {transport}
       </Screen>
     );
   }
@@ -218,36 +223,20 @@ function Practice({ song }: { song: LocalSong }) {
       </View>
       {exportMp3.isError && <Notice tone="error">{(exportMp3.error as Error).message}</Notice>}
 
-      <View style={styles.stats}>
-        <Stat label="Key" value={soundingKey} sub={shapeKey ?? undefined} confidence={result.key_confidence} />
-        <Stat label="Tempo" value={result.bpm ? `${Math.round(result.bpm)} BPM` : '—'} sub={player.rate !== 1 && result.bpm ? `${Math.round(result.bpm * player.rate)} BPM at ${player.rate}×` : undefined} confidence={result.bpm_confidence} />
-        <Stat label="Capo" value={practice.capo ? `Fret ${practice.capo}` : 'None'} />
-        <Stat label="Length" value={formatTime(result.duration)} />
-      </View>
-
+      {/* Wide windows: player on the left, chords/lyrics/tab beside it so both stay in view. */}
       <View style={[styles.split, { flexDirection: isDesktop ? 'row' : 'column' }]}>
-        <View style={{ flex: 1, gap: spacing.lg }}>{nowPlaying}</View>
-        <View style={{ flex: 1, gap: spacing.lg }}>{transport}</View>
-      </View>
-
-      <CapoCard
-        capo={practice.capo}
-        keyShift={practice.keyShift}
-        options={options}
-        recommended={recommended}
-        onCapo={(capo) => setPractice({ capo })}
-        onKeyShift={(keyShift) => setPractice({ keyShift })}
-      />
-
+      <View style={{ flex: isDesktop ? 11 : undefined }}>{stage}</View>
+      <View style={{ flex: isDesktop ? 10 : undefined, gap: spacing.lg, minWidth: 0 }}>
       <SegmentedControl<Panel>
         label="Practice view"
         value={panel}
         onChange={setPanel}
         options={[
           { value: 'chords', label: 'Chords' },
-          { value: 'tab', label: 'Fingerpicking tab' },
+          { value: 'lyrics', label: 'Lyrics' },
+          { value: 'tab', label: 'Tab' },
           { value: 'learn', label: 'Learn' },
-          { value: 'transcribe', label: 'Transcribe (beta)' },
+          { value: 'transcribe', label: 'Transcribe β' },
         ]}
       />
 
@@ -263,9 +252,21 @@ function Practice({ song }: { song: LocalSong }) {
           <ChordList timeline={timeline} activeIndex={index} onSeek={(t) => void seek(t)} onEdit={setEditing} />
         </View>
       )}
+      {panel === 'lyrics' && lyricsPanel}
       {panel === 'tab' && tabPanel}
       {panel === 'learn' && <LearnPanel timeline={timeline} songBpm={result.bpm} />}
       {panel === 'transcribe' && <TranscribePanel song={song} capo={practice.capo} grid={tabBars} current={tabPos} onSeek={(t) => void seek(t)} />}
+      </View>
+      </View>
+
+      <CapoCard
+        capo={practice.capo}
+        keyShift={practice.keyShift}
+        options={options}
+        recommended={recommended}
+        onCapo={(capo) => setPractice({ capo })}
+        onKeyShift={(keyShift) => setPractice({ keyShift })}
+      />
 
       <Notice>{`${result.notes.join(' ')} Engine ${result.model_version}.`}</Notice>
     </Screen>

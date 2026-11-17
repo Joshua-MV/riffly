@@ -19,10 +19,12 @@ export interface NowPlayingProps {
   beat: number | null;
   countIn: number | null;
   capo: number;
+  /** Render without its own card (when placed inside another card). */
+  bare?: boolean;
 }
 
 /** The current chord shape (big), its diagram, upcoming changes and the beat. */
-export function NowPlaying({ current, next, large, beat, countIn, capo }: NowPlayingProps) {
+export function NowPlaying({ current, next, large, beat, countIn, capo, bare = false }: NowPlayingProps) {
   const { colors } = useTheme();
   const { isPhone } = useLayout();
   const label = current && current.label !== 'N' ? current.display : null;
@@ -30,8 +32,9 @@ export function NowPlaying({ current, next, large, beat, countIn, capo }: NowPla
   const voicing = sym ? getVoicings(sym)[0] : undefined;
   const diagramSize = large ? (isPhone ? 170 : 230) : 132;
 
+  const Wrapper = bare ? View : Card;
   return (
-    <Card style={[styles.now, large && { paddingVertical: spacing.xl }]}>
+    <Wrapper style={[styles.now, large && { paddingVertical: spacing.xl }]}>
       <View style={{ flex: 1, gap: spacing.sm }}>
         <View style={styles.head}>
           <Text variant="overline" tone="subtle">{countIn ? 'Get ready' : capo ? `Now · capo ${capo}` : 'Now'}</Text>
@@ -61,7 +64,7 @@ export function NowPlaying({ current, next, large, beat, countIn, capo }: NowPla
         </View>
       </View>
       {voicing && !countIn && <ChordDiagram voicing={voicing} width={diagramSize} tone="highlight" />}
-    </Card>
+    </Wrapper>
   );
 }
 
