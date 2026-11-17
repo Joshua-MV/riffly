@@ -141,6 +141,35 @@ def test_api_key_is_enforced_when_configured(tmp_path):
         assert c.get("/api/health").status_code == 200
 
 
+def test_workers_start_on_demand_and_stop_when_idle(tmp_path):
+    app = create_app(_settings(tmp_path, worker_idle_seconds=1))
+    with TestClient(app) as c:
+        store = app.state.jobs
+        assert not store.executor_running  # nothing loaded until a song arrives
+        y, _ = render_progression(["C", "G"], repeats=1)
+        job = c.post("/api/analyses", files={"file": ("a.wav", _wav_bytes(y), "audio/wav")}).json()
+        assert store.executor_running
+        assert _wait_for(c, job["id"])["status"] == "completed"
+        deadline = time.time() + 10
+        while store.executor_running and time.time() < deadline:
+            time.sleep(0.1)
+        assert not store.executor_running  # memory released after the idle period
+
+
+def test_serves_built_web_app_with_spa_fallback(tmp_path):
+    dist = tmp_path / "dist"
+    (dist / "_expo").mkdir(parents=True)
+    (dist / "index.html").write_text("<html>riffly</html>")
+    (dist / "_expo" / "app.js").write_text("console.log(1)")
+    with TestClient(create_app(_settings(tmp_path, app_dir=dist))) as c:
+        assert c.get("/").text == "<html>riffly</html>"
+        assert c.get("/song/abc").text == "<html>riffly</html>"  # client-side route
+        assert c.get("/_expo/app.js").text == "console.log(1)"
+        assert c.get("/../secrets.txt").text == "<html>riffly</html>"  # no path escape
+        assert c.get("/api/nope").status_code == 404
+        assert c.get("/api/health").json()["status"] == "ok"
+
+
 def test_state_is_wiped_on_startup(tmp_path):
     leftover = tmp_path / "work" / "old-job"
     leftover.mkdir(parents=True)

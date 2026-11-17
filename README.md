@@ -68,29 +68,45 @@ song going as you move around the app, and a mini player shows the current chord
 
 Requirements: Node.js 20+ and Python 3.11+. FFmpeg is optional (needed only for M4A uploads).
 
+From the project folder:
+
+```bash
+npm start
+```
+
+That's it. The first run installs everything it needs and builds the app, which takes a few
+minutes. After that it starts in seconds, opens **http://localhost:8000** in your browser, and
+Ctrl+C stops it.
+
+| Command | Use it for | What runs |
+|---|---|---|
+| `npm start` | **Using** Riffly | One Python process serves the built app and the analysis API. The app is rebuilt automatically only when its code has changed |
+| `npm run dev` | **Editing** Riffly's code | The analysis server plus Expo's live-reload dev server (http://localhost:8081) |
+| `npm run setup` | Installing without starting | Same first-run setup, then exits |
+
+Songs are stored per browser *address*, so songs saved under `npm start` (localhost:8000)
+are a separate library from those saved under `npm run dev` (localhost:8081).
+
+### Memory use (measured on Windows)
+
+| | Before | `npm start` now |
+|---|---|---|
+| Idle | ~1.1 GB (Expo dev bundler 933 MB, Python 86 MB, npx 78 MB) | **~190 MB** (Python 87 MB, Node launcher ~106 MB) |
+| While analysing a song | +2 worker processes, ~370 MB each, kept in memory afterwards | +1 worker, 258 MB peak, which **exits after 5 idle minutes** |
+
+The worker holds the audio libraries (librosa/numba). It is started only when a song arrives
+and stops after `WORKER_IDLE_SECONDS` (default 300). Transcription loads PyTorch only when you
+use it.
+
 Optional experimental transcription (free, roughly 1 GB including PyTorch; the Demucs model
-downloads on first use):
+downloads on first use), run from `backend/` with its virtualenv:
 
 ```bash
-pip install -r requirements-transcribe.txt
+.venv\Scripts\python.exe -m pip install -r requirements-transcribe.txt
 ```
 
 ```bash
-pip install --no-deps basic-pitch==0.4.0
-```
-
-```bash
-cd backend
-python -m venv .venv
-.venv\Scripts\activate            # macOS/Linux: source .venv/bin/activate
-pip install -r requirements-dev.txt
-uvicorn app.main:app --reload --port 8000
-```
-
-```bash
-cd frontend
-npm install
-npx expo start --web
+.venv\Scripts\python.exe -m pip install --no-deps basic-pitch==0.4.0
 ```
 
 On a physical phone, set `EXPO_PUBLIC_API_URL=http://<your-computer-LAN-IP>:8000` in `frontend/.env`.

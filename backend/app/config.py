@@ -33,7 +33,12 @@ class Settings(BaseSettings):
     max_duration_minutes: int = 12
     job_ttl_minutes: int = 30
     max_active_jobs: int = 8
-    analysis_workers: int = 2
+    # One worker keeps RAM low on a personal machine; raise it on a shared server.
+    analysis_workers: int = 1
+    # Seconds without work before worker processes exit and release their memory.
+    worker_idle_seconds: int = 300
+    # Serve the built web app (frontend/dist) from this server: one process for `npm start`.
+    app_dir: Path | None = None
     # "process" isolates CPU-heavy DSP from the API; "thread" is used by tests.
     analysis_executor: Literal["process", "thread"] = "process"
 

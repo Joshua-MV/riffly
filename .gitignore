@@ -2,6 +2,8 @@
 node_modules/
 frontend/.expo/
 frontend/dist/
+# root node_modules (none today, but keep it out)
+/node_modules/
 frontend/web-build/
 frontend/ios/
 frontend/android/
