@@ -16,6 +16,7 @@ const FILTERS: readonly { value: Filter; label: string }[] = [
   { value: 'all', label: 'All' },
   { value: 'major', label: 'Major' },
   { value: 'minor', label: 'Minor' },
+  { value: 'power', label: 'Power' },
   { value: 'seventh', label: '7th' },
   { value: 'suspended', label: 'Sus' },
   { value: 'diminished', label: 'Dim' },

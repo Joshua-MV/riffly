@@ -6,6 +6,8 @@
     "dev": "node scripts/dev.mjs --start",
     "start": "node scripts/dev.mjs --start",
     "dev:live": "node scripts/dev.mjs",
+    "desktop": "node scripts/dev.mjs --desktop",
+    "desktop:build": "npm --prefix frontend exec tauri build",
     "setup": "node scripts/dev.mjs --setup-only"
   },
   "engines": {

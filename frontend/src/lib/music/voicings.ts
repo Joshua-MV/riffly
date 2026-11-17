@@ -18,7 +18,7 @@ export type Frets = readonly (number | null)[];
 /** Finger per string: 1 index … 4 pinky, 0 = open/unused, null = muted. */
 export type Fingers = readonly (number | null)[];
 
-export type VoicingShape = 'open' | 'E-shape' | 'A-shape';
+export type VoicingShape = 'open' | 'E-shape' | 'A-shape' | 'D-shape';
 export type Difficulty = 'beginner' | 'intermediate' | 'advanced';
 
 export interface Barre {
@@ -64,6 +64,8 @@ const E_SHAPES: Partial<Record<ChordQuality, ShapeTemplate>> = {
   sus4: { offsets: [0, 2, 2, 2, 0, 0], fingers: [1, 2, 3, 4, 1, 1] },
   dim: { offsets: [0, 1, 2, 0, x, x], fingers: [1, 2, 3, 1, x, x] },
   aug: { offsets: [0, x, 2, 1, 1, 0], fingers: [1, x, 4, 2, 3, 1] },
+  // Power chord on the low E string: root, fifth, octave. Mute the rest with the fretting hand.
+  '5': { offsets: [0, 2, 2, x, x, x], fingers: [1, 3, 4, x, x, x] },
 };
 
 // Root on string 5 (A-shape).
@@ -77,6 +79,13 @@ const A_SHAPES: Partial<Record<ChordQuality, ShapeTemplate>> = {
   sus4: { offsets: [x, 0, 2, 2, 3, 0], fingers: [x, 1, 2, 3, 4, 1] },
   dim: { offsets: [x, 0, 1, 2, 1, x], fingers: [x, 1, 2, 4, 3, x] },
   aug: { offsets: [x, 0, 3, 2, 2, x], fingers: [x, 1, 4, 2, 3, x] },
+  // Power chord on the A string: root, fifth, octave.
+  '5': { offsets: [x, 0, 2, 2, x, x], fingers: [x, 1, 3, 4, x, x] },
+};
+
+// Power chords rooted on the D string (third common position).
+const D_SHAPES: Partial<Record<ChordQuality, ShapeTemplate>> = {
+  '5': { offsets: [x, x, 0, 2, 3, x], fingers: [x, x, 1, 3, 4, x] },
 };
 
 interface CuratedVoicing {
@@ -135,8 +144,10 @@ export function detectBarre(frets: Frets, fingers: Fingers): Barre | null {
   return { fret, fromString: strings[0], toString: strings[strings.length - 1] };
 }
 
-function difficultyOf(shape: VoicingShape, barre: Barre | null, maxFret: number): Difficulty {
+function difficultyOf(chord: ChordSymbol, shape: VoicingShape, barre: Barre | null, maxFret: number): Difficulty {
   if (shape === 'open' && !barre) return 'beginner';
+  // Two- or three-finger power chords are among the first shapes electric players learn.
+  if (chord.quality === '5') return maxFret > 12 ? 'intermediate' : 'beginner';
   if (barre && barre.toString - barre.fromString >= 4) return maxFret > 9 ? 'advanced' : 'intermediate';
   return maxFret > 9 ? 'advanced' : 'intermediate';
 }
@@ -153,7 +164,7 @@ function makeVoicing(chord: ChordSymbol, frets: Frets, fingers: Fingers, shape: 
     frets,
     fingers,
     shape: effectiveShape,
-    difficulty: difficultyOf(effectiveShape, barre, maxFret),
+    difficulty: difficultyOf(chord, effectiveShape, barre, maxFret),
     barre,
     minFret,
     maxFret,
@@ -180,6 +191,7 @@ function instantiate(template: ShapeTemplate, baseFret: number): { frets: Frets;
 const SHAPE_SOURCES: readonly [VoicingShape, Partial<Record<ChordQuality, ShapeTemplate>>, number][] = [
   ['E-shape', E_SHAPES, STANDARD_OPEN_PCS[0]],
   ['A-shape', A_SHAPES, STANDARD_OPEN_PCS[1]],
+  ['D-shape', D_SHAPES, STANDARD_OPEN_PCS[2]],
 ];
 
 const DIFFICULTY_RANK: Record<Difficulty, number> = { beginner: 0, intermediate: 1, advanced: 2 };

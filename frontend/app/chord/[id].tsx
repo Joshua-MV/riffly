@@ -16,6 +16,9 @@ import { spacing } from '@/theme/tokens';
 
 const STRING_NAMES = ['6th (low E)', '5th (A)', '4th (D)', '3rd (G)', '2nd (B)', '1st (high E)'];
 const FINGER_NAMES = ['', 'index', 'middle', 'ring', 'pinky'];
+const INTERVAL_NAMES: Record<number, string> = {
+  0: 'root', 2: '2nd', 3: '♭3rd', 4: '3rd', 5: '4th', 6: '♭5th', 7: '5th', 8: '♯5th', 10: '♭7th', 11: '7th',
+};
 
 /** Plain-language instructions generated from the voicing data. */
 function instructions(v: Voicing): string[] {
@@ -78,7 +81,7 @@ export default function ChordDetailScreen() {
           <Text tone="muted">{info.description}</Text>
           <View style={styles.tones}>
             {chordTones(chord).map((pc, i) => (
-              <Chip key={pc} label={`${pitchClassName(pc)} · ${['root', info.intervals[1] === 2 ? '2nd' : info.intervals[1] === 5 ? '4th' : '3rd', '5th', '7th'][i]}`} />
+              <Chip key={pc} label={`${pitchClassName(pc)} · ${INTERVAL_NAMES[info.intervals[i]] ?? ''}`} />
             ))}
           </View>
 

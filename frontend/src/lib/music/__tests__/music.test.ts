@@ -89,7 +89,7 @@ describe('voicings', () => {
   const library = libraryChords();
 
   it('covers every root and quality', () => {
-    expect(library).toHaveLength(12 * 9);
+    expect(library).toHaveLength(12 * 10);
     for (const entry of library) expect(entry.voicings.length).toBeGreaterThan(0);
   });
 
@@ -122,6 +122,25 @@ describe('voicings', () => {
     expect(getVoicings({ root: 4, quality: 'maj' })[0].fingers).toEqual([0, 2, 3, 1, 0, 0]);
     expect(getVoicings({ root: 9, quality: 'min' })[0].fingers).toEqual([null, 0, 2, 3, 1, 0]);
     expect(getVoicings({ root: 9, quality: 'min' })[0].difficulty).toBe('beginner');
+  });
+
+  it('includes power chords in three positions', () => {
+    expect(parseChord('E5')).toEqual({ root: 4, quality: '5' });
+    expect(parseChord('F#5')).toEqual({ root: 6, quality: '5' });
+    expect(formatChord({ root: 10, quality: '5' })).toBe('Bb5');
+    expect(transposeLabel('A5', 3)).toBe('C5');
+    const g5 = getVoicings({ root: 7, quality: '5' });
+    expect(g5.map((v) => v.frets)).toEqual(
+      expect.arrayContaining([
+        [3, 5, 5, null, null, null], // low E string
+        [null, 10, 12, 12, null, null], // A string
+        [null, null, 5, 7, 8, null], // D string
+      ]),
+    );
+    expect(g5.every((v) => v.difficulty === 'beginner')).toBe(true);
+    // Open E5 and A5 use open strings.
+    expect(getVoicings({ root: 4, quality: '5' })[0].frets).toEqual([0, 2, 2, null, null, null]);
+    expect(getVoicings({ root: 9, quality: '5' })[0].frets).toEqual([null, 0, 2, 2, null, null]);
   });
 
   it('detects barre chords', () => {

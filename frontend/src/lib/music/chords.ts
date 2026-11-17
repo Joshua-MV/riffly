@@ -1,8 +1,8 @@
 import { mod12, parsePitchClass, pitchClassName, type PitchClass, type Spelling } from './notes';
 
-export type ChordQuality = 'maj' | 'min' | '7' | 'maj7' | 'm7' | 'sus2' | 'sus4' | 'dim' | 'aug';
+export type ChordQuality = 'maj' | 'min' | '7' | 'maj7' | 'm7' | 'sus2' | 'sus4' | 'dim' | 'aug' | '5';
 
-export type ChordCategory = 'major' | 'minor' | 'seventh' | 'suspended' | 'diminished' | 'augmented';
+export type ChordCategory = 'major' | 'minor' | 'seventh' | 'suspended' | 'diminished' | 'augmented' | 'power';
 
 export interface QualityInfo {
   intervals: readonly number[];
@@ -24,9 +24,10 @@ export const QUALITIES: Record<ChordQuality, QualityInfo> = {
   sus4: { intervals: [0, 5, 7], suffix: 'sus4', label: 'Suspended 4th', category: 'suspended', optional: [], description: 'Unresolved and expectant. The third is replaced by the fourth.' },
   dim: { intervals: [0, 3, 6], suffix: 'dim', label: 'Diminished', category: 'diminished', optional: [], description: 'Tense and unstable. Minor third and flattened fifth.' },
   aug: { intervals: [0, 4, 8], suffix: 'aug', label: 'Augmented', category: 'augmented', optional: [], description: 'Eerie and restless. Major third and sharpened fifth.' },
+  '5': { intervals: [0, 7], suffix: '5', label: 'Power chord', category: 'power', optional: [], description: 'Just the root and fifth (often doubled an octave up). No third, so it is neither major nor minor. Punchy and clean under distortion: the backbone of rock and punk.' },
 };
 
-export const QUALITY_ORDER: readonly ChordQuality[] = ['maj', 'min', '7', 'maj7', 'm7', 'sus2', 'sus4', 'dim', 'aug'];
+export const QUALITY_ORDER: readonly ChordQuality[] = ['maj', 'min', '5', '7', 'maj7', 'm7', 'sus2', 'sus4', 'dim', 'aug'];
 
 export interface ChordSymbol {
   root: PitchClass;
@@ -44,6 +45,7 @@ const SUFFIX_ALIASES: Record<string, ChordQuality> = {
   sus2: 'sus2', sus4: 'sus4', sus: 'sus4',
   dim: 'dim', '°': 'dim', o: 'dim',
   aug: 'aug', '+': 'aug',
+  '5': '5', power: '5',
 };
 
 /** Parse a chord symbol such as "F#m7", "Bb", "Dsus4", "G/B". Returns null for "N" or unknown. */

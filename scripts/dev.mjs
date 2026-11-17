@@ -32,6 +32,8 @@ const setupOnly = process.argv.includes('--setup-only');
 // `npm run dev` / `npm start`: lightweight mode for using the app. One Python process serves the pre-built app
 // and the API; no development bundler (which alone uses ~900 MB of RAM).
 const lean = process.argv.includes('--start');
+// `npm run desktop`: the Windows app (Tauri window) plus the analysis server it talks to.
+const desktop = process.argv.includes('--desktop');
 const dist = path.join(frontend, 'dist');
 
 const color = (code, s) => (process.stdout.isTTY ? `\x1b[${code}m${s}\x1b[0m` : s);
@@ -202,6 +204,23 @@ async function main() {
   setup();
   if (setupOnly) {
     say('Setup complete. Run `npm run dev` to start Riffly.');
+    return;
+  }
+
+  if (desktop) {
+    for (const [port, what] of [[API_PORT, 'analysis server'], [APP_PORT, 'app dev server']]) {
+      if (!(await portFree(port))) fail(`Port ${port} (needed for the ${what}) is already in use. Close the other Riffly window and try again.`);
+    }
+    say('Starting the analysis server and the Riffly window (the first start compiles the app, several minutes)...');
+    start('api', '36', venvPython, ['-m', 'uvicorn', 'app.main:app', '--port', String(API_PORT)], backend);
+    // Rust's cargo lives in ~/.cargo/bin; terminals opened before Rust was installed don't have it.
+    const cargoBin = path.join(process.env.USERPROFILE ?? process.env.HOME ?? '', '.cargo', 'bin');
+    if (!existsSync(path.join(cargoBin, isWin ? 'cargo.exe' : 'cargo'))) {
+      fail('Rust is needed to build the desktop app. Install it from https://rustup.rs and run `npm run desktop` again.');
+    }
+    const PATH = `${cargoBin}${path.delimiter}${process.env.PATH ?? process.env.Path ?? ''}`;
+    // Tauri starts the Expo dev server itself (beforeDevCommand) and opens the native window.
+    start('app', '33', 'npx', ['tauri', 'dev'], frontend, { BROWSER: 'none', PATH, Path: PATH });
     return;
   }
 

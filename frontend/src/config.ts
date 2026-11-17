@@ -4,7 +4,22 @@
  */
 import { Platform } from 'react-native';
 
+/** Optional override (web/desktop), e.g. to point the app at a server on another machine or port. */
+function storedApiUrl(): string | null {
+  try {
+    return typeof localStorage !== 'undefined' ? localStorage.getItem('riffly.apiUrl') : null;
+  } catch {
+    return null;
+  }
+}
+
 function defaultApiUrl(): string {
+  const stored = storedApiUrl();
+  if (stored) return stored;
+  if (Platform.OS === 'web' && typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window) {
+    // Windows app: the analysis server runs alongside it on this PC (until the C++ engine lands).
+    return 'http://localhost:8000';
+  }
   if (Platform.OS === 'web' && typeof window !== 'undefined') {
     // `npm start` serves the app from the analysis server itself: same origin.
     // `npm run dev` serves it from the Expo dev server on 8081, next to the API on 8000.

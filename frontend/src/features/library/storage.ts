@@ -1,16 +1,17 @@
 /**
- * iOS/Android storage: plain files in the app's private documents folder.
- *   <documents>/riffly/songs/<id>.json   song record
- *   <documents>/riffly/songs/<id>.mp3    audio
- * On iOS the folder is also visible in the Files app (UIFileSharingEnabled in app.json).
- * Uninstalling the app deletes it, so "Save MP3" exports a copy via the share sheet.
+ * Android/iOS storage: a SQLite database (expo-sqlite) for song records and plain MP3 files
+ * in the app's private documents folder:
+ *   <documents>/SQLite/riffly.db          songs table (see sqlStore.ts)
+ *   <documents>/riffly/songs/<id>.mp3     audio
+ * Uninstalling the app deletes both, so "Save MP3" exports a copy via the share sheet.
  */
 
 import { Directory, File, Paths } from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
+import { openDatabaseAsync } from 'expo-sqlite';
 
-import { exportFilename, parseSong, sortByNewest, type LocalSong } from './model';
-import type { SongStorage } from './storage.types';
+import { exportFilename, parseSong } from './model';
+import { createSqlStorage, type AudioFiles, type SqlDb } from './sqlStore';
 
 function songsDir(): Directory {
   const dir = new Directory(Paths.document, 'riffly', 'songs');
@@ -18,58 +19,59 @@ function songsDir(): Directory {
   return dir;
 }
 
-const jsonFile = (id: string) => new File(songsDir(), `${id}.json`);
 const mp3File = (id: string) => new File(songsDir(), `${id}.mp3`);
 
-async function readSong(file: File): Promise<LocalSong | null> {
-  try {
-    return parseSong(JSON.parse(await file.text()));
-  } catch {
-    return null; // A corrupt record shouldn't break the whole library.
+async function openDb(): Promise<SqlDb> {
+  const db = await openDatabaseAsync('riffly.db');
+  const sql: SqlDb = {
+    exec: (source) => db.execAsync(source),
+    run: async (source, params) => void (await db.runAsync(source, params)),
+    all: (source, params) => db.getAllAsync(source, params),
+  };
+  await migrateJsonRecords(sql);
+  return sql;
+}
+
+/** Earlier versions stored each song as <id>.json next to its MP3; move those into SQLite. */
+async function migrateJsonRecords(db: SqlDb) {
+  const legacy = songsDir()
+    .list()
+    .filter((f): f is File => f instanceof File && f.name.endsWith('.json'));
+  if (!legacy.length) return;
+  await db.exec(
+    'CREATE TABLE IF NOT EXISTS songs (id TEXT PRIMARY KEY, title TEXT NOT NULL, artist TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, is_favourite INTEGER NOT NULL DEFAULT 0, audio_bytes INTEGER NOT NULL, record TEXT NOT NULL)',
+  );
+  for (const f of legacy) {
+    try {
+      const song = parseSong(JSON.parse(await f.text()));
+      if (song) {
+        await db.run(
+          'INSERT OR IGNORE INTO songs (id, title, artist, created_at, updated_at, is_favourite, audio_bytes, record) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+          [song.id, song.title, song.artist, song.createdAt, song.updatedAt, song.isFavourite ? 1 : 0, song.audioBytes, JSON.stringify(song)],
+        );
+      }
+      f.delete();
+    } catch {
+      // Leave unreadable files in place rather than lose data.
+    }
   }
 }
 
-export const storage: SongStorage = {
-  location: 'This device (app documents folder)',
-
-  async list() {
-    const files = songsDir()
-      .list()
-      .filter((f): f is File => f instanceof File && f.name.endsWith('.json'));
-    const songs = await Promise.all(files.map(readSong));
-    return sortByNewest(songs.filter((s): s is LocalSong => s !== null));
+const files: AudioFiles = {
+  write: async (id, mp3) => {
+    await mp3File(id).write(mp3);
   },
-
-  async get(id) {
-    const f = jsonFile(id);
-    return f.exists ? readSong(f) : null;
+  remove: async (id) => {
+    const f = mp3File(id);
+    if (f.exists) f.delete();
   },
-
-  async add(song, mp3) {
-    // Write the audio first: a record without audio is worse than stray audio.
-    await mp3File(song.id).write(new Uint8Array(mp3));
-    await jsonFile(song.id).write(JSON.stringify(song));
-  },
-
-  async put(song) {
-    await jsonFile(song.id).write(JSON.stringify(song));
-  },
-
-  async remove(id) {
-    for (const f of [jsonFile(id), mp3File(id)]) if (f.exists) f.delete();
-  },
-
-  async audioUri(id) {
+  uri: async (id) => {
     const f = mp3File(id);
     if (!f.exists) throw new Error('The audio file for this song is missing on this device.');
     return f.uri;
   },
-
-  async uploadSource(song) {
-    return { kind: 'native', uri: await storage.audioUri(song.id), name: exportFilename(song), mimeType: 'audio/mpeg' };
-  },
-
-  async exportMp3(song) {
+  uploadSource: async (song) => ({ kind: 'native', uri: await files.uri(song.id), name: exportFilename(song), mimeType: 'audio/mpeg' }),
+  exportMp3: async (song) => {
     // Share a copy with a friendly name ("Artist - Title.mp3").
     const copy = new File(Paths.cache, exportFilename(song));
     if (copy.exists) copy.delete();
@@ -78,3 +80,5 @@ export const storage: SongStorage = {
     await Sharing.shareAsync(copy.uri, { mimeType: 'audio/mpeg', UTI: 'public.mp3', dialogTitle: 'Save MP3' });
   },
 };
+
+export const storage = createSqlStorage(openDb, files, 'This device (SQLite database)');

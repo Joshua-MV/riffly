@@ -14,6 +14,7 @@ export function shapeDifficulty(chord: ChordSymbol): number {
   const v = getVoicings(chord)[0];
   if (!v) return 10;
   if (v.shape === 'open' && !v.barre) return 1;
+  if (chord.quality === '5') return 2; // small movable shape, no barre
   if (v.shape === 'open') return 3; // partial barre, e.g. the small F
   return v.maxFret > 9 ? 7 : 5;
 }

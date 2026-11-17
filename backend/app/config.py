@@ -26,7 +26,10 @@ class Settings(BaseSettings):
     api_key: str | None = None
 
     cors_origins: list[str] = Field(
-        default_factory=lambda: ["http://localhost:8081", "http://localhost:19006"]
+        # Expo dev server, Expo web legacy port, and the Windows app's WebView origins.
+        default_factory=lambda: [
+            "http://localhost:8081", "http://localhost:19006", "http://tauri.localhost", "tauri://localhost",
+        ]
     )
 
     max_upload_mb: int = 50

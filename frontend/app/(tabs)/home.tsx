@@ -65,7 +65,7 @@ export default function HomeScreen() {
 
       <View style={[styles.quick, { flexDirection: isPhone ? 'column' : 'row' }]}>
         <QuickCard icon="speedometer" title="Tune up" body="Chromatic tuner with 5 tunings. Works offline." onPress={() => router.push('/')} />
-        <QuickCard icon="grid" title="Chord library" body="108 chords with diagrams, fingerings and sound." onPress={() => router.push('/chords')} />
+        <QuickCard icon="grid" title="Chord library" body="120 chords, including power chords, with diagrams, fingerings and sound." onPress={() => router.push('/chords')} />
         <QuickCard icon="albums" title="My music" body="Your analysed songs, favourites and corrections." onPress={() => router.push('/library')} />
       </View>
 

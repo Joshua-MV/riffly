@@ -58,7 +58,7 @@ song going as you move around the app, and a mini player shows the current chord
 |---|---|---|
 | Design system (dark default + light), responsive nav (bottom tabs ↔ sidebar ≥ 1024 px) | ✅ | Web, desktop and phone widths |
 | **Tuner**: YIN pitch detection, 5 tuning presets, string lock, A4 reference, stability | ✅ | Unit tests (±2 cents). Web mic path tested with a synthetic input signal |
-| **Chord library**: 108 chords, diagrams, instructions, synthesized strum | ✅ | Every voicing checked by tests |
+| **Chord library**: 120 chords (12 roots × 10 types, including power chords), diagrams, instructions, synthesized strum | ✅ | Every voicing checked by tests |
 | **Song analyzer**: upload, background analysis, MP3 conversion, save on device | ✅ | 20 backend tests + browser end-to-end |
 | **Play along**: synced chords, waveform seek, speed (pitch kept), A–B loop, transpose, corrections | ✅ | Browser end-to-end, including playback with the server off |
 | **My Music**: on-device library, favourites, search, delete, MP3 export | ✅ | Browser (IndexedDB) |
@@ -80,6 +80,43 @@ Ctrl+C stops it. `npm start` does exactly the same.
 
 In Windows PowerShell, if you see "running scripts is disabled", type `npm.cmd run dev`
 instead, or use Command Prompt.
+
+### Windows app
+
+Riffly is also a real Windows program: its own window, installer, and a SQLite database.
+It's built with Tauri (free) and needs Rust plus the Visual Studio C++ Build Tools (both free).
+
+```bash
+npm run desktop
+```
+
+That opens Riffly in its own window, together with the analysis server.
+
+```bash
+npm run desktop:build
+```
+
+That builds the installers into `frontend/src-tauri/target/release/bundle/`:
+`Riffly_0.1.0_x64-setup.exe` (about 8 MB) and `Riffly_0.1.0_x64_en-US.msi` (about 10 MB).
+
+| | Where the Windows app keeps your music |
+|---|---|
+| Songs, chords, corrections, settings | `%APPDATA%\app.riffly\riffly.db` (SQLite) |
+| Audio | `%APPDATA%\app.riffly\songs\<id>.mp3` |
+
+Measured: `riffly.exe` uses 30 MB, and the WebView2 that draws its screens about 217 MB
+private (similar to one browser tab).
+
+> **Not ready for the Microsoft Store yet.** Song analysis still needs the Python analysis
+> server running on the PC (port 8000). The next milestone replaces it with a C++ engine
+> built into the app (and into the Android app), so store users need nothing else installed.
+
+### Android
+
+The Android app stores songs the same way: SQLite (`expo-sqlite`) plus MP3 files in the app's
+private folder. Songs saved by earlier test builds as JSON files are imported automatically.
+It can't analyse songs on its own until the C++ engine lands. Publishing on Google Play needs
+a developer account, which has a **one-time $25 fee**; everything else is free.
 
 | Command | Use it for | What runs |
 |---|---|---|
