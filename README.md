@@ -138,7 +138,7 @@ in the app.
 ## Layout
 
 ```
-frontend/app/            routes: (tabs)/{index,analyze,tuner,chords,library}, song/[id], chord/[id], profile
+frontend/app/            routes: (tabs)/{index = tuner (first screen), home, analyze, chords, library}, song/[id], chord/[id], profile
 frontend/src/features/   library/ (on-device storage: web IndexedDB + native files, importer), songs/, tuner/
 frontend/src/lib/        pure, tested logic: music theory, voicings, YIN, tuner engine, synthesis
 backend/app/             FastAPI app, in-memory job store, upload validation

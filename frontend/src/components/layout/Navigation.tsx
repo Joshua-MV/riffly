@@ -19,9 +19,10 @@ export interface NavItem {
 }
 
 export const NAV_ITEMS: readonly NavItem[] = [
-  { name: 'index', label: 'Home', icon: 'home-outline', iconActive: 'home' },
+  // The tuner is the first screen: tuning up is the first thing you do with a guitar.
+  { name: 'index', label: 'Tuner', icon: 'speedometer-outline', iconActive: 'speedometer' },
+  { name: 'home', label: 'Home', icon: 'home-outline', iconActive: 'home' },
   { name: 'analyze', label: 'Analyze', icon: 'pulse-outline', iconActive: 'pulse' },
-  { name: 'tuner', label: 'Tuner', icon: 'speedometer-outline', iconActive: 'speedometer' },
   { name: 'chords', label: 'Chords', icon: 'grid-outline', iconActive: 'grid' },
   { name: 'library', label: 'My Music', icon: 'albums-outline', iconActive: 'albums' },
 ];

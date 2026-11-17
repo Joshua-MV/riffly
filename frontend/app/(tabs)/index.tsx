@@ -1,134 +1,209 @@
 import { Ionicons } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
+import { useEffect, useRef, useState } from 'react';
+import { Platform, Pressable, StyleSheet, View } from 'react-native';
+
 import { router } from 'expo-router';
-import { StyleSheet, View } from 'react-native';
-import Svg, { Rect } from 'react-native-svg';
 
 import { Logo } from '@/components/layout/Logo';
-import { Button, IconButton, type IconName } from '@/components/ui/Button';
-import { Card, EmptyState, Notice, Screen, SectionHeader } from '@/components/ui/primitives';
+import { TunerGauge } from '@/components/music/TunerGauge';
+import { Button, IconButton } from '@/components/ui/Button';
+import { Card, Chip, Notice, Screen } from '@/components/ui/primitives';
 import { Text } from '@/components/ui/Text';
-import { useSongs } from '@/features/songs/hooks';
-import { SongRow } from '@/features/songs/SongRow';
+import { useTuner } from '@/features/tuner/useTuner';
+import { GUITAR_TUNINGS } from '@/lib/music/instruments';
 import { useTheme } from '@/theme/ThemeProvider';
 import { useLayout } from '@/theme/useLayout';
-import { palette, radius, spacing } from '@/theme/tokens';
+import { radius, spacing, typeScale } from '@/theme/tokens';
 
-function greeting() {
-  const h = new Date().getHours();
-  return h < 5 ? 'Late-night session?' : h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening';
-}
-
-/** Decorative equaliser for the hero card. */
-function HeroBars({ width }: { width: number }) {
-  const heights = [0.3, 0.55, 0.8, 0.5, 0.95, 0.7, 0.4, 0.65, 0.85, 0.45, 0.6, 0.3, 0.75, 0.5, 0.35];
-  const w = width / heights.length;
-  return (
-    <Svg width={width} height={96} aria-hidden>
-      {heights.map((h, i) => (
-        <Rect key={i} x={i * w + w * 0.2} y={96 - h * 96} width={w * 0.6} height={h * 96} rx={w * 0.3} fill={i % 5 === 4 ? palette.amber400 : palette.violet400} opacity={0.25 + h * 0.6} />
-      ))}
-    </Svg>
-  );
-}
-
-export default function HomeScreen() {
+export default function TunerScreen() {
   const { colors } = useTheme();
-  const { isPhone, isDesktop } = useLayout();
-  const songs = useSongs();
-  const recent = (songs.data ?? []).slice(0, 4);
-  const favourites = (songs.data ?? []).filter((s) => s.isFavourite).slice(0, 4);
+  const { width, isPhone, isDesktop } = useLayout();
+  const [tuningId, setTuningId] = useState('standard');
+  const [selected, setSelected] = useState<number | null>(null);
+  const [a4, setA4] = useState(440);
+  const tuning = GUITAR_TUNINGS.find((t) => t.id === tuningId) ?? GUITAR_TUNINGS[0];
+  const { status, error, reading, strings, start, stop } = useTuner(tuning, selected, a4);
+
+  const listening = status === 'listening';
+  const inTune = reading?.state === 'in-tune';
+  const stable = !!reading?.stable;
+  const gaugeWidth = Math.min(isPhone ? width - spacing.lg * 2 : 520, 520);
+
+  // A single gentle haptic tick when a string locks in tune.
+  const wasStable = useRef(false);
+  useEffect(() => {
+    if (stable && !wasStable.current && Platform.OS !== 'web') void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    wasStable.current = stable;
+  }, [stable]);
+
+  const stateColor = !reading ? colors.textSubtle : inTune ? colors.success : colors.highlight;
+  const hint = !listening
+    ? 'Start the tuner and pluck a string'
+    : !reading
+      ? 'Listening… pluck a single string'
+      : stable
+        ? 'In tune'
+        : inTune
+          ? 'Hold it…'
+          : reading.state === 'flat'
+            ? 'Too low — tighten the string'
+            : 'Too high — loosen the string';
 
   return (
-    <Screen>
-      <View style={styles.top}>
-        {!isDesktop ? <Logo /> : <View />}
-        <IconButton icon="person-circle-outline" label="Profile and settings" onPress={() => router.push('/profile')} />
+    <Screen maxWidth={760}>
+      {!isDesktop && (
+        <View style={styles.brand}>
+          <Logo />
+          <IconButton icon="person-circle-outline" label="Profile and settings" onPress={() => router.push('/profile')} />
+        </View>
+      )}
+      <View style={styles.header}>
+        <View>
+          <Text variant="overline" tone="subtle">Chromatic tuner</Text>
+          <Text variant="title">Tuner</Text>
+        </View>
+        <View style={styles.reference}>
+          <IconButton icon="remove" label="Lower reference pitch" size={32} onPress={() => setA4((v) => Math.max(415, v - 1))} />
+          <Text variant="caption" tone="muted" accessibilityLabel={`Reference A4 ${a4} hertz`}>A4 = {a4} Hz</Text>
+          <IconButton icon="add" label="Raise reference pitch" size={32} onPress={() => setA4((v) => Math.min(466, v + 1))} />
+        </View>
       </View>
 
-      <View>
-        <Text variant="overline" tone="subtle">{greeting()}</Text>
-        <Text variant="hero">What are we playing?</Text>
+      <View style={styles.chips} accessibilityLabel="Tuning presets">
+        {GUITAR_TUNINGS.map((t) => (
+          <Chip key={t.id} label={t.name} selected={t.id === tuningId} onPress={() => { setTuningId(t.id); setSelected(null); }} />
+        ))}
       </View>
 
-      <Card style={[styles.hero, { flexDirection: isPhone ? 'column' : 'row', borderColor: colors.accent }]} elevated>
-        <View style={{ flex: 1, gap: spacing.md }}>
-          <Text variant="title">Learn any song by ear</Text>
-          <Text tone="muted">Upload a recording and Riffly estimates the chords, key and tempo — then plays along with you, chord by chord.</Text>
-          <View style={styles.heroActions}>
-            <Button label="Analyse a song" icon="arrow-up-circle" size="lg" onPress={() => router.push('/analyze')} />
+      <Card style={styles.stage} padded={false}>
+        <View style={styles.readout} aria-live="polite">
+          <Text variant="overline" tone="subtle">
+            {reading?.target ? `Target ${reading.target.note}` : 'Detected note'}
+          </Text>
+          <View style={styles.noteRow}>
+            <Text style={[styles.note, { color: reading ? colors.text : colors.textSubtle }]}>
+              {reading ? reading.name : '–'}
+            </Text>
+            {reading && <Text variant="heading" tone="muted" style={styles.octave}>{reading.octave}</Text>}
           </View>
         </View>
-        <View style={{ alignSelf: isPhone ? 'stretch' : 'flex-end', alignItems: 'center' }}>
-          <HeroBars width={isPhone ? 260 : 240} />
+
+        <View style={styles.gaugeRow}>
+          <FlatSharp label="Flat" icon="chevron-back" active={reading?.state === 'flat'} />
+          <TunerGauge cents={reading ? reading.centsOff : null} inTune={inTune} width={gaugeWidth - 96} />
+          <FlatSharp label="Sharp" icon="chevron-forward" active={reading?.state === 'sharp'} />
+        </View>
+
+        <View style={styles.metrics}>
+          <Metric label="Cents" value={reading ? `${reading.centsOff > 0 ? '+' : ''}${reading.centsOff.toFixed(1)}` : '—'} />
+          <Metric label="Frequency" value={reading ? `${reading.frequency.toFixed(1)} Hz` : '—'} />
+          <Metric label="Target" value={reading ? `${reading.targetFrequency.toFixed(1)} Hz` : '—'} />
+        </View>
+
+        <View style={[styles.hint, { backgroundColor: stable ? colors.successSoft : 'transparent' }]}>
+          {stable && <Ionicons name="checkmark-circle" size={18} color={colors.success} />}
+          <Text variant="subheading" style={{ color: stateColor }}>{hint}</Text>
         </View>
       </Card>
 
-      <View style={[styles.quick, { flexDirection: isPhone ? 'column' : 'row' }]}>
-        <QuickCard icon="speedometer" title="Tune up" body="Chromatic tuner with 5 tunings. Works offline." onPress={() => router.push('/tuner')} />
-        <QuickCard icon="grid" title="Chord library" body="108 chords with diagrams, fingerings and sound." onPress={() => router.push('/chords')} />
-        <QuickCard icon="albums" title="My music" body="Your analysed songs, favourites and corrections." onPress={() => router.push('/library')} />
-      </View>
-
       <View style={{ gap: spacing.md }}>
-        <SectionHeader title="Recently analysed" action={recent.length > 0 ? <Button label="See all" variant="ghost" size="sm" onPress={() => router.push('/library')} /> : undefined} />
-        {songs.isError ? (
-          <Notice tone="warning">{(songs.error as Error).message}</Notice>
-        ) : recent.length === 0 && !songs.isLoading ? (
-          <Card>
-            <EmptyState icon="musical-notes-outline" title="No songs yet" body="Analyse your first song to see its chords here." />
-          </Card>
-        ) : (
-          recent.map((s) => <SongRow key={s.id} song={s} />)
-        )}
+        <Text variant="overline" tone="subtle">Strings · tap to lock a target</Text>
+        <View style={styles.strings}>
+          <StringButton label="Auto" sub="any" active={selected === null} onPress={() => setSelected(null)} />
+          {strings.map((s) => {
+            const name = s.note.replace(/-?\d+$/, '');
+            const live = reading?.target?.index === s.index;
+            return (
+              <StringButton
+                key={s.index}
+                label={name}
+                sub={`${6 - s.index}`}
+                active={selected === s.index}
+                live={live}
+                done={live && stable}
+                onPress={() => setSelected(selected === s.index ? null : s.index)}
+              />
+            );
+          })}
+        </View>
       </View>
 
-      {favourites.length > 0 && (
-        <View style={{ gap: spacing.md }}>
-          <SectionHeader title="Favourites" />
-          {favourites.map((s) => <SongRow key={s.id} song={s} />)}
-        </View>
+      {status === 'denied' && (
+        <Notice tone="error">
+          Microphone access was denied. Enable it for Riffly in your {Platform.OS === 'web' ? 'browser site settings' : 'device settings'} to use the tuner.
+        </Notice>
       )}
+      {error && <Notice tone="error">{error}</Notice>}
 
-      <View style={{ gap: spacing.md }}>
-        <SectionHeader title="New to guitar?" />
-        <View style={[styles.quick, { flexDirection: isPhone ? 'column' : 'row' }]}>
-          <TipCard step="1" title="Tune first" body="An out-of-tune guitar makes every chord sound wrong. Start each session with the tuner." />
-          <TipCard step="2" title="Learn four chords" body="G, D, Em and C open the door to hundreds of songs. Find them in the chord library." />
-          <TipCard step="3" title="Slow it down" body="In play-along, drop to 0.75× — the pitch stays the same — and loop the tricky change." />
-        </View>
-      </View>
+      <Button
+        label={listening ? 'Stop tuner' : 'Start tuner'}
+        icon={listening ? 'stop' : 'mic'}
+        size="lg"
+        variant={listening ? 'secondary' : 'primary'}
+        loading={status === 'requesting'}
+        onPress={listening ? stop : start}
+        fullWidth
+      />
+
+      <Notice>
+        Works offline — audio is analysed on this device and never recorded. Acoustic guitars: hold the phone near the sound hole. Electric guitars: tune by the amp, or connect an audio interface and select it as your device's input.
+      </Notice>
     </Screen>
   );
 }
 
-function QuickCard({ icon, title, body, onPress }: { icon: IconName; title: string; body: string; onPress: () => void }) {
+function FlatSharp({ label, icon, active }: { label: string; icon: 'chevron-back' | 'chevron-forward'; active: boolean }) {
   const { colors } = useTheme();
   return (
-    <Card onPress={onPress} accessibilityLabel={title} style={styles.quickCard}>
-      <View style={[styles.quickIcon, { backgroundColor: colors.accentSoft }]}>
-        <Ionicons name={icon} size={20} color={colors.accent} />
-      </View>
-      <Text variant="subheading">{title}</Text>
-      <Text variant="caption" tone="muted">{body}</Text>
-    </Card>
+    <View style={styles.flatSharp} accessibilityLabel={`${label}${active ? ', active' : ''}`}>
+      <Ionicons name={icon} size={28} color={active ? colors.highlight : colors.border} />
+      <Text variant="caption" style={{ color: active ? colors.highlight : colors.textSubtle }}>{label}</Text>
+    </View>
   );
 }
 
-function TipCard({ step, title, body }: { step: string; title: string; body: string }) {
+function Metric({ label, value }: { label: string; value: string }) {
   return (
-    <Card style={styles.quickCard}>
-      <Text variant="mono" tone="highlight">{step.padStart(2, '0')}</Text>
-      <Text variant="subheading">{title}</Text>
-      <Text variant="caption" tone="muted">{body}</Text>
-    </Card>
+    <View style={styles.metric}>
+      <Text variant="overline" tone="subtle">{label}</Text>
+      <Text variant="mono">{value}</Text>
+    </View>
+  );
+}
+
+function StringButton({ label, sub, active, live, done, onPress }: { label: string; sub: string; active: boolean; live?: boolean; done?: boolean; onPress: () => void }) {
+  const { colors } = useTheme();
+  const border = done ? colors.success : active ? colors.accent : live ? colors.highlight : colors.border;
+  return (
+    <Pressable
+      role="radio"
+      accessibilityState={{ checked: active }}
+      accessibilityLabel={sub === 'any' ? 'Auto-detect string' : `String ${sub}, ${label}`}
+      onPress={onPress}
+      style={[styles.stringBtn, { borderColor: border, backgroundColor: active ? colors.accentSoft : colors.surface }]}
+    >
+      <Text variant="subheading" style={{ color: done ? colors.success : colors.text }}>{label}</Text>
+      <Text variant="caption" tone="subtle" style={{ fontSize: 11 }}>{sub}</Text>
+    </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
-  top: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  hero: { padding: spacing.xl, gap: spacing.xl, borderRadius: radius.lg, overflow: 'hidden' },
-  heroActions: { flexDirection: 'row', gap: spacing.md, marginTop: spacing.sm, flexWrap: 'wrap' },
-  quick: { gap: spacing.md },
-  quickCard: { flex: 1, gap: spacing.xs },
-  quickIcon: { width: 36, height: 36, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center', marginBottom: spacing.xs },
+  brand: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', flexWrap: 'wrap', gap: spacing.md },
+  reference: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
+  stage: { alignItems: 'center', paddingVertical: spacing.xl, gap: spacing.md, overflow: 'hidden' },
+  readout: { alignItems: 'center' },
+  noteRow: { flexDirection: 'row', alignItems: 'flex-start' },
+  note: { ...typeScale.hero, fontSize: 88, lineHeight: 96, letterSpacing: -3 },
+  octave: { marginTop: 14, marginLeft: 2 },
+  gaugeRow: { flexDirection: 'row', alignItems: 'flex-end' },
+  flatSharp: { width: 48, alignItems: 'center', paddingBottom: spacing.sm },
+  metrics: { flexDirection: 'row', gap: spacing.xxl, flexWrap: 'wrap', justifyContent: 'center' },
+  metric: { alignItems: 'center', gap: 2, minWidth: 88 },
+  hint: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingHorizontal: spacing.lg, paddingVertical: spacing.sm, borderRadius: radius.pill },
+  strings: { flexDirection: 'row', gap: spacing.sm, flexWrap: 'wrap' },
+  stringBtn: { flexGrow: 1, flexBasis: 52, minWidth: 52, height: 64, borderRadius: radius.md, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
 });
