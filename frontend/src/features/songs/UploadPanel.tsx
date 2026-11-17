@@ -1,15 +1,15 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useQueryClient } from '@tanstack/react-query';
 import * as DocumentPicker from 'expo-document-picker';
-import { router } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import { Platform, StyleSheet, View } from 'react-native';
 
 import { Button } from '@/components/ui/Button';
-import { Notice, ProgressBar } from '@/components/ui/primitives';
+import { Notice } from '@/components/ui/primitives';
 import { Text } from '@/components/ui/Text';
 import { config } from '@/config';
-import { uploadSong, type UploadSource } from '@/services/api';
+import { startImport } from '@/features/library/importer';
+import type { UploadSource } from '@/services/api';
 import { useTheme } from '@/theme/ThemeProvider';
 import { radius, spacing } from '@/theme/tokens';
 
@@ -27,37 +27,22 @@ export function validateFile(name: string, size: number | undefined): string | n
   return null;
 }
 
-type Phase = { kind: 'idle' } | { kind: 'uploading'; name: string; progress: number } | { kind: 'error'; message: string };
-
 export function UploadPanel() {
   const { colors } = useTheme();
   const qc = useQueryClient();
-  const [phase, setPhase] = useState<Phase>({ kind: 'idle' });
+  const [error, setError] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
-  const abortRef = useRef<(() => void) | null>(null);
   const dropRef = useRef<React.ComponentRef<typeof View>>(null);
 
-  const start = async (source: UploadSource, size?: number) => {
+  const start = (source: UploadSource, size?: number) => {
     const invalid = validateFile(source.name, size);
-    if (invalid) {
-      setPhase({ kind: 'error', message: invalid });
-      return;
-    }
-    setPhase({ kind: 'uploading', name: source.name, progress: 0 });
-    const title = source.name.replace(/\.[^.]+$/, '');
-    const { promise, abort } = uploadSong(source, { title }, (p) => setPhase({ kind: 'uploading', name: source.name, progress: p }));
-    abortRef.current = abort;
-    try {
-      const song = await promise;
-      void qc.invalidateQueries({ queryKey: songKeys.all });
-      setPhase({ kind: 'idle' });
-      router.push(`/song/${song.id}`);
-    } catch (e) {
-      setPhase({ kind: 'error', message: e instanceof Error ? e.message : 'Upload failed.' });
-    } finally {
-      abortRef.current = null;
-    }
+    setError(invalid);
+    if (invalid) return;
+    // Progress and an "Open" button appear in the ImportList on this and the My Music screen.
+    startImport(source, () => void qc.invalidateQueries({ queryKey: songKeys.all }));
   };
+  const startRef = useRef(start);
+  startRef.current = start;
 
   const pick = async () => {
     const res = await DocumentPicker.getDocumentAsync({
@@ -66,8 +51,8 @@ export function UploadPanel() {
     });
     if (res.canceled || !res.assets?.[0]) return;
     const a = res.assets[0];
-    if (Platform.OS === 'web' && a.file) await start({ kind: 'web', file: a.file, name: a.name }, a.size);
-    else await start({ kind: 'native', uri: a.uri, name: a.name, mimeType: a.mimeType ?? 'audio/mpeg' }, a.size);
+    if (Platform.OS === 'web' && a.file) start({ kind: 'web', file: a.file, name: a.name }, a.size);
+    else start({ kind: 'native', uri: a.uri, name: a.name, mimeType: a.mimeType ?? 'audio/mpeg' }, a.size);
   };
 
   // Web-only drag and drop, attached to the underlying DOM node.
@@ -84,7 +69,7 @@ export function UploadPanel() {
       e.preventDefault();
       setDragging(false);
       const file = e.dataTransfer?.files?.[0];
-      if (file) void start({ kind: 'web', file, name: file.name }, file.size);
+      if (file) startRef.current({ kind: 'web', file, name: file.name }, file.size);
     };
     el.addEventListener('dragover', over);
     el.addEventListener('dragleave', leave);
@@ -94,10 +79,8 @@ export function UploadPanel() {
       el.removeEventListener('dragleave', leave);
       el.removeEventListener('drop', drop);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const uploading = phase.kind === 'uploading';
   return (
     <View
       ref={dropRef}
@@ -107,29 +90,21 @@ export function UploadPanel() {
       ]}
     >
       <View style={[styles.icon, { backgroundColor: colors.accentSoft }]}>
-        <Ionicons name={uploading ? 'cloud-upload' : 'musical-notes'} size={28} color={colors.accent} />
+        <Ionicons name="musical-notes" size={28} color={colors.accent} />
       </View>
-      {uploading ? (
-        <View style={styles.progress}>
-          <Text variant="subheading" numberOfLines={1}>Uploading {phase.name}</Text>
-          <ProgressBar progress={phase.progress} />
-          <Text variant="caption" tone="muted">{Math.round(phase.progress * 100)}% · analysis starts automatically</Text>
-          <Button label="Cancel" variant="ghost" size="sm" onPress={() => abortRef.current?.()} />
-        </View>
-      ) : (
-        <>
-          <Text variant="heading" align="center">
-            {Platform.OS === 'web' ? 'Drop a song here' : 'Choose a song to analyse'}
-          </Text>
-          <Text tone="muted" align="center">
-            {config.supportedFormats.join(', ')} · up to {config.maxUploadMb} MB · up to 12 minutes
-          </Text>
-          <Button label={Platform.OS === 'web' ? 'Browse files' : 'Choose file'} icon="folder-open" onPress={pick} size="lg" />
-        </>
-      )}
-      {phase.kind === 'error' && (
+      <Text variant="heading" align="center">
+        {Platform.OS === 'web' ? 'Drop a song here' : 'Choose a song to analyse'}
+      </Text>
+      <Text tone="muted" align="center">
+        {config.supportedFormats.join(', ')} · up to {config.maxUploadMb} MB · up to 12 minutes
+      </Text>
+      <Button label={Platform.OS === 'web' ? 'Browse files' : 'Choose file'} icon="folder-open" onPress={pick} size="lg" />
+      <Text variant="caption" tone="subtle" align="center">
+        Saved on this device as MP3. The analysis server deletes its copy as soon as it's done.
+      </Text>
+      {error && (
         <View style={{ alignSelf: 'stretch' }}>
-          <Notice tone="error">{phase.message}</Notice>
+          <Notice tone="error">{error}</Notice>
         </View>
       )}
     </View>
@@ -139,5 +114,4 @@ export function UploadPanel() {
 const styles = StyleSheet.create({
   zone: { borderWidth: 1.5, borderStyle: 'dashed', borderRadius: radius.lg, padding: spacing.xxl, alignItems: 'center', gap: spacing.md },
   icon: { width: 64, height: 64, borderRadius: radius.pill, alignItems: 'center', justifyContent: 'center' },
-  progress: { alignSelf: 'stretch', alignItems: 'center', gap: spacing.sm, maxWidth: 420, width: '100%' },
 });

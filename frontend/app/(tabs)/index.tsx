@@ -36,7 +36,7 @@ export default function HomeScreen() {
   const { isPhone, isDesktop } = useLayout();
   const songs = useSongs();
   const recent = (songs.data ?? []).slice(0, 4);
-  const favourites = (songs.data ?? []).filter((s) => s.is_favourite).slice(0, 4);
+  const favourites = (songs.data ?? []).filter((s) => s.isFavourite).slice(0, 4);
 
   return (
     <Screen>
@@ -72,7 +72,7 @@ export default function HomeScreen() {
       <View style={{ gap: spacing.md }}>
         <SectionHeader title="Recently analysed" action={recent.length > 0 ? <Button label="See all" variant="ghost" size="sm" onPress={() => router.push('/library')} /> : undefined} />
         {songs.isError ? (
-          <Notice tone="warning">{(songs.error as Error).message} The tuner and chord library still work offline.</Notice>
+          <Notice tone="warning">{(songs.error as Error).message}</Notice>
         ) : recent.length === 0 && !songs.isLoading ? (
           <Card>
             <EmptyState icon="musical-notes-outline" title="No songs yet" body="Analyse your first song to see its chords here." />

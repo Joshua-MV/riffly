@@ -1,20 +1,19 @@
 import type { PressState } from '@/components/ui/pressState';
-import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useMemo, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { ActivityIndicator, Platform, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 
 import { ChordDiagram } from '@/components/music/ChordDiagram';
 import { Waveform } from '@/components/music/Waveform';
 import { Button, IconButton } from '@/components/ui/Button';
 import { Card, Chip, EmptyState, Notice, Screen } from '@/components/ui/primitives';
 import { Text } from '@/components/ui/Text';
-import { useCorrectChord, useReanalyze, useRevertCorrection, useSong, useUpdateSong } from '@/features/songs/hooks';
-import { buildTimeline, formatTime, segmentAt, upcoming, type TimelineChord } from '@/features/songs/timeline';
+import type { LocalSong } from '@/features/library/model';
+import { useAudioUri, useCorrectChord, useExportMp3, useRevertCorrection, useSong, useUpdateSong } from '@/features/songs/hooks';
+import { buildTimeline, formatBytes, formatTime, segmentAt, upcoming, type TimelineChord } from '@/features/songs/timeline';
 import { usePlayback } from '@/features/songs/usePlayback';
 import { parseChord, transposeLabel } from '@/lib/music/chords';
 import { getVoicings } from '@/lib/music/voicings';
-import type { SongDetail } from '@/services/api';
 import { useTheme } from '@/theme/ThemeProvider';
 import { useLayout } from '@/theme/useLayout';
 import { radius, spacing, typeScale } from '@/theme/tokens';
@@ -37,17 +36,15 @@ export default function SongScreen() {
       <Screen>
         <BackBar />
         <EmptyState
-          icon="cloud-offline-outline"
-          title="Couldn't load this song"
-          body={song.error instanceof Error ? song.error.message : 'It may have been deleted.'}
+          icon="musical-notes-outline"
+          title="Song not found"
+          body={song.error instanceof Error ? song.error.message : 'It may have been deleted from this device.'}
           action={<Button label="Try again" onPress={() => song.refetch()} />}
         />
       </Screen>
     );
   }
-  const data = song.data;
-  if (data.status !== 'completed' || !data.analysis?.result) return <Processing song={data} />;
-  return <Results song={data} />;
+  return <Results song={song.data} />;
 }
 
 function BackBar({ children }: { children?: React.ReactNode }) {
@@ -60,37 +57,12 @@ function BackBar({ children }: { children?: React.ReactNode }) {
   );
 }
 
-function Processing({ song }: { song: SongDetail }) {
-  const { colors } = useTheme();
-  const reanalyze = useReanalyze(song.id);
-  const failed = song.status === 'failed';
-  return (
-    <Screen maxWidth={720}>
-      <BackBar />
-      <Card style={styles.processing}>
-        {failed ? (
-          <Ionicons name="alert-circle" size={40} color={colors.danger} />
-        ) : (
-          <ActivityIndicator size="large" color={colors.accent} />
-        )}
-        <Text variant="heading" align="center">{song.title}</Text>
-        <Text tone="muted" align="center">
-          {failed
-            ? song.analysis?.error ?? 'Analysis failed.'
-            : song.status === 'queued'
-              ? 'Waiting for an analysis worker…'
-              : 'Analysing harmony, beats and key. This usually takes 5–30 seconds.'}
-        </Text>
-        {failed && <Button label="Retry analysis" icon="refresh" loading={reanalyze.isPending} onPress={() => reanalyze.mutate()} />}
-      </Card>
-    </Screen>
-  );
-}
-
-function Results({ song }: { song: SongDetail }) {
+function Results({ song }: { song: LocalSong }) {
   const { isPhone, isDesktop } = useLayout();
-  const result = song.analysis!.result!;
-  const playback = usePlayback(song.audio_url);
+  const result = song.analysis;
+  const audio = useAudioUri(song.id);
+  const playback = usePlayback(audio.data ?? null);
+  const exportMp3 = useExportMp3();
   const [transpose, setTranspose] = useState(0);
   const [focus, setFocus] = useState(false);
   const [editing, setEditing] = useState<TimelineChord | null>(null);
@@ -166,18 +138,29 @@ function Results({ song }: { song: SongDetail }) {
     <Screen maxWidth={1120}>
       <BackBar>
         <IconButton
-          icon={song.is_favourite ? 'heart' : 'heart-outline'}
-          label={song.is_favourite ? 'Remove from favourites' : 'Add to favourites'}
-          active={song.is_favourite}
-          onPress={() => update.mutate({ is_favourite: !song.is_favourite })}
+          icon={song.isFavourite ? 'heart' : 'heart-outline'}
+          label={song.isFavourite ? 'Remove from favourites' : 'Add to favourites'}
+          active={song.isFavourite}
+          onPress={() => update.mutate({ isFavourite: !song.isFavourite })}
+        />
+        <Button
+          label={Platform.OS === 'web' ? 'Download MP3' : 'Save MP3'}
+          icon="download-outline"
+          variant="secondary"
+          loading={exportMp3.isPending}
+          disabled={!audio.data}
+          onPress={() => exportMp3.mutate(song)}
         />
         <Button label="Play along" icon="expand" onPress={() => setFocus(true)} />
       </BackBar>
 
       <View>
-        <Text variant="overline" tone="subtle">{song.artist ?? 'Analysed song'}</Text>
+        <Text variant="overline" tone="subtle">{song.artist ?? `MP3 · ${formatBytes(song.audioBytes)} · saved on this device`}</Text>
         <Text variant="title">{song.title}</Text>
       </View>
+
+      {audio.isError && <Notice tone="error">{(audio.error as Error).message} The chords are still available below.</Notice>}
+      {exportMp3.isError && <Notice tone="error">{(exportMp3.error as Error).message}</Notice>}
 
       <View style={styles.stats}>
         <Stat label="Key" value={keyLabel} confidence={result.key_confidence} />
@@ -334,7 +317,7 @@ function CorrectionEditor({ songId, chord, transpose, onClose }: { songId: strin
     if (!parsed) return;
     // Corrections are stored in the original key, so they survive transposition.
     correct.mutate(
-      { start: chord.start, original_label: chord.label, corrected_label: transposeLabel(value.trim(), -transpose) },
+      { start: chord.start, originalLabel: chord.label, correctedLabel: transposeLabel(value.trim(), -transpose) },
       { onSuccess: onClose },
     );
   };
@@ -356,7 +339,7 @@ function CorrectionEditor({ songId, chord, transpose, onClose }: { songId: strin
       {correct.error && <Notice tone="error">{(correct.error as Error).message}</Notice>}
       <View style={styles.controlRow}>
         <Button label="Save correction" onPress={save} disabled={!parsed} loading={correct.isPending} />
-        {chord.corrected && <Button label="Revert to detected" variant="secondary" loading={revert.isPending} onPress={() => revert.mutate(chord.corrected!.id, { onSuccess: onClose })} />}
+        {chord.corrected && <Button label="Revert to detected" variant="secondary" loading={revert.isPending} onPress={() => revert.mutate(chord.start, { onSuccess: onClose })} />}
         <Button label="Cancel" variant="ghost" onPress={onClose} />
       </View>
     </Card>

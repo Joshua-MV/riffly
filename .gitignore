@@ -1,4 +1,4 @@
-# Dependencies & builds
+﻿# Dependencies & builds
 node_modules/
 frontend/.expo/
 frontend/dist/
@@ -14,7 +14,7 @@ __pycache__/
 .pytest_cache/
 
 # Local data (uploaded audio, SQLite) and secrets
-backend/data/
+backend/work/
 .env
 *.env.local
 

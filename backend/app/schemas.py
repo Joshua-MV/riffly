@@ -1,14 +1,11 @@
 from __future__ import annotations
 
-from datetime import datetime
 from enum import Enum
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 
-class AnalysisStatus(str, Enum):
-    uploaded = "uploaded"
-    queued = "queued"
+class JobStatus(str, Enum):
     processing = "processing"
     completed = "completed"
     failed = "failed"
@@ -38,57 +35,16 @@ class AnalysisResultOut(BaseModel):
     notes: list[str]
 
 
-class AnalysisOut(BaseModel):
-    id: str
-    song_id: str
-    status: AnalysisStatus
-    error: str | None = None
-    model_version: str | None = None
-    created_at: datetime
-    completed_at: datetime | None = None
-    result: AnalysisResultOut | None = None
-
-
-class CorrectionIn(BaseModel):
-    start: float = Field(ge=0, description="Start time (s) of the chord segment being corrected")
-    original_label: str = Field(min_length=1, max_length=16)
-    corrected_label: str = Field(min_length=1, max_length=16, pattern=r"^(N|[A-G](#|b)?[A-Za-z0-9#b/+()]*)$")
-
-
-class CorrectionOut(CorrectionIn):
-    id: str
-    analysis_id: str
-    created_at: datetime
-
-
-class SongOut(BaseModel):
+class JobOut(BaseModel):
     id: str
     title: str
-    artist: str | None
     original_filename: str
-    content_type: str
-    size_bytes: int
-    duration: float | None
-    is_favourite: bool
-    notes: str | None
-    created_at: datetime
-    updated_at: datetime
-    status: AnalysisStatus
-    key: str | None = None
-    bpm: float | None = None
-
-
-class SongDetailOut(SongOut):
-    audio_url: str
-    analysis: AnalysisOut | None
-    corrections: list[CorrectionOut]
-
-
-class SongUpdate(BaseModel):
-    title: str | None = Field(default=None, min_length=1, max_length=200)
-    artist: str | None = Field(default=None, max_length=200)
-    notes: str | None = Field(default=None, max_length=5000)
-    is_favourite: bool | None = None
+    status: JobStatus
+    error: str | None = None
+    result: AnalysisResultOut | None = None
+    # Present once completed: download the MP3 from here, then DELETE the job.
+    audio_url: str | None = None
+    audio_bytes: int | None = None
 
 
 class ErrorOut(BaseModel):

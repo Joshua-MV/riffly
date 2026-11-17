@@ -2,6 +2,7 @@ import { StyleSheet, View } from 'react-native';
 
 import { Card, Notice, Screen } from '@/components/ui/primitives';
 import { Text } from '@/components/ui/Text';
+import { ImportList } from '@/features/library/ImportList';
 import { UploadPanel } from '@/features/songs/UploadPanel';
 import { useLayout } from '@/theme/useLayout';
 import { spacing } from '@/theme/tokens';
@@ -25,6 +26,7 @@ export default function AnalyzeScreen() {
         </Text>
       </View>
       <UploadPanel />
+      <ImportList />
       <Notice>
         Results are estimates of the whole mix — not a transcription of the guitar part. Each chord shows a confidence score, and you can correct any chord by tapping it.
       </Notice>

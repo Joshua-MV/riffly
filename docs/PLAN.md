@@ -23,18 +23,22 @@ engineering around them:
 
 ```
 ┌──────────────────────── Expo app (iOS / Android / Web) ────────────────────────┐
-│ expo-router screens ─► feature hooks ─► services (api, auth, audio I/O)        │
-│        │                    │                                                   │
+│ expo-router screens ─► feature hooks ─► on-device library (MP3 + JSON per song) │
+│        │                    │            web: IndexedDB · native: app documents │
 │  design system        src/lib/music  (pure TS: notes, tunings, chords,         │
 │  (tokens + ui)        voicings, transpose, YIN pitch detection) — unit tested   │
-└───────────┬───────────────────────────────────────────────┬────────────────────┘
-            │ REST (JWT bearer)                             │ supabase-js (auth)
-┌───────────▼──────────── FastAPI backend ──────────┐   ┌────▼──────────────┐
-│ routers ─► services ─► repository (Local|Supabase)│◄─►│ Supabase Postgres │
-│               │                                   │   │ + Auth + Storage  │
-│          job queue ─► audio engine (librosa DSP)  │   │ (RLS everywhere)  │
-└───────────────────────────────────────────────────┘   └───────────────────┘
+└───────────┬────────────────────────────────────────────────────────────────────┘
+            │ REST: upload → poll → download MP3 → DELETE
+┌───────────▼──────────── FastAPI analysis server (stateless) ──────────────────┐
+│ routers ─► in-memory job store ─► worker: audio engine (librosa) + MP3 (LAME)  │
+│ temp files only; deleted on collection, after 30 min, and on startup           │
+└────────────────────────────────────────────────────────────────────────────────┘
 ```
+
+**No database (decided 2026-11-17).** Each user's library lives only on their device. That is
+simpler, free, private, and keeps copyrighted audio off our servers. The cost is no
+cross-device sync and no accounts. If sync is wanted later, export/import of the library
+(a zip of the MP3 + JSON files) is the database-free path.
 
 Key decisions and trade-offs:
 
@@ -45,8 +49,9 @@ Key decisions and trade-offs:
 | Chord voicings generated from movable CAGED shapes + curated open chords | Hundreds of correct voicings without hand-typing errors; validated by tests (every note is a chord tone, bass is the root, fret span ≤ 4) | Generated fingerings are standard but not always the "friendliest" |
 | Baseline chord engine = HPSS → CQT chroma → template matching → HMM/Viterbi → beat snapping | Real, explainable, license-clean, CPU-only | Lower accuracy than deep models; documented |
 | `ChordRecognizer` protocol | A pretrained model can be swapped in without touching the API | — |
-| Repository abstraction with **Local** (SQLite + disk) and **Supabase** backends | The whole product runs end-to-end on a laptop with zero credentials; production uses Supabase with RLS | Two implementations to maintain (shared contract tests) |
-| In-process job queue (thread pool) | Simple, no Redis for v1 | Not durable across restarts; replace with arq/Celery + Redis for scale (interface is isolated in `jobs.py`) |
+| On-device library (`SongStorage`: IndexedDB on web, files on native) | No database, works offline, user owns their files | No sync between devices; uninstalling deletes it (MP3 export mitigates) |
+| Server converts everything to MP3 (lameenc, 192 kbps); MP3 uploads pass through | One format on every device, roughly 5× smaller than WAV | Lossy for WAV sources |
+| Stateless in-memory job store | Nothing to back up, migrate or secure at rest | Restarting the server cancels in-flight jobs (the app shows "try again") |
 | expo-audio for playback | One API across platforms; supports pitch-preserving rate changes | Loop/seek precision is ~50 ms (fine for play-along) |
 
 ### Pretrained chord models — licence review
@@ -69,8 +74,8 @@ actually integrated.
 |---|---|
 | Expo / React Native / expo-router, FastAPI, librosa, NumPy, SciPy | Open source (MIT/BSD/ISC) |
 | Fonts (Inter, Space Grotesk via Google Fonts), Ionicons | Open licences (OFL/MIT) |
-| Local development (SQLite + local files, `AUTH_MODE=local`) | Free, no account needed |
-| Supabase (Auth, Postgres, Storage) | Free tier (500 MB DB, 1 GB storage) |
+| Storage | The user's own device; no database or cloud storage at all |
+| MP3 encoding (lameenc / LAME) | Open source (LGPL) |
 | Native builds | Free locally (`npx expo run:*`); EAS Build also has a free tier |
 | Backend hosting | Any free tier able to run a Python container, or self-hosted |
 
@@ -86,15 +91,14 @@ MusicApp/
 │   └── src/
 │       ├── theme/          tokens, ThemeProvider, typography
 │       ├── components/     ui/ (Button, Card, Text…), music/ (Fretboard, TunerGauge, Waveform…), layout/
-│       ├── features/       tuner/, songs/, chords/, auth/
+│       ├── features/       library/ (on-device storage, importer), songs/, tuner/ (mic adapters)
 │       ├── lib/music/      notes, tunings, chords, voicings, transpose, pitch (YIN) + __tests__
-│       ├── lib/audio/      mic input adapters (web / native), synth (Karplus-Strong)
-│       └── services/       api client, supabase client, config
-├── backend/                FastAPI
-│   ├── app/                main, config, auth, schemas, routers/, repository/, jobs, audio/
-│   ├── tests/              engine tests on synthesised audio, API integration tests
-│   └── scripts/evaluate.py WCSR evaluation against annotated .lab files
-└── supabase/migrations/    schema + RLS + storage policies
+│       ├── lib/audio/      synth (Karplus-Strong), chord playback
+│       └── services/       analysis API client
+└── backend/                FastAPI (stateless)
+    ├── app/                main, config, schemas, routers/analyses, jobs (in-memory), uploads, audio/
+    ├── tests/              engine tests on synthesised audio, API integration tests
+    └── scripts/evaluate.py WCSR evaluation against annotated .lab files
 ```
 
 ## 4. Milestones
@@ -104,12 +108,13 @@ MusicApp/
 2. **Tuner** — YIN, web microphone adapter, gauge UI, presets, string selection, stability
    detection. Native adapter behind the same interface (dev build).
 3. **Chord library** — generated + curated voicings, search, filters, diagrams, synthesized playback.
-4. **Backend + audio engine** — FastAPI, local repository, job queue, chord/key/BPM engine,
-   synthetic-audio tests, Supabase schema with RLS.
-5. **Analyzer UI + Play Along** — upload (drag-drop on web), progress, polling, results
-   timeline synced to playback, loop, speed, transpose, manual corrections.
-6. **Accounts & My Music** — Supabase auth, Supabase repository, favourites, notes, cross-device.
-7. **Hardening** — Demucs stage, durable queue, E2E tests, deployment.
+4. **Backend + audio engine** — stateless FastAPI, job store, chord/key/BPM engine, MP3
+   conversion, synthetic-audio tests. ✅
+5. **Analyzer UI + Play Along** — upload (drag-drop on web), progress, results timeline synced
+   to playback, loop, speed, transpose, manual corrections. ✅
+6. **My Music (on device)** — local library, favourites, notes, MP3 export. ✅ Next: notes UI
+   and library export/import (zip) for moving to a new device.
+7. **Hardening** — run on iOS/Android hardware, Demucs stage, Docker image with FFmpeg, free hosting.
 
 ## 5. Major risks
 
@@ -119,5 +124,6 @@ MusicApp/
 | Native microphone PCM needs native module | Interface-based adapter; requires Expo dev build; web works today |
 | M4A decoding requires FFmpeg on the server | Validate early and return a clear error if FFmpeg is missing; Docker image includes it |
 | Long CPU-bound analysis (≈5–20 s per song) | Background jobs, status polling, duration cap (12 min), file-size cap (50 MB) |
-| Copyrighted uploads | Private per-user storage, RLS, no sharing features, retention/deletion policy |
+| Copyrighted uploads | The server keeps nothing after collection; audio lives only on the user's device; no sharing features |
+| Losing a library (uninstall, cleared browser data) | "Save/Download MP3" per song; browser persistent-storage request; library zip export planned |
 | Low-frequency strings (E2 ≈ 82 Hz) on phone mics | 4096-sample window, YIN with parabolic interpolation, median smoothing |

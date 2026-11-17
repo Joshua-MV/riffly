@@ -7,13 +7,16 @@ import { Card, EmptyState, Notice, Screen, SearchField, SegmentedControl } from 
 import { Text } from '@/components/ui/Text';
 import { useDeleteSong, useSongs } from '@/features/songs/hooks';
 import { SongRow } from '@/features/songs/SongRow';
-import type { Song } from '@/services/api';
+import { ImportList } from '@/features/library/ImportList';
+import type { LocalSong } from '@/features/library/model';
+import { storage } from '@/features/library/storage';
+import { formatBytes } from '@/features/songs/timeline';
 import { spacing } from '@/theme/tokens';
 
 type View_ = 'all' | 'favourites';
 
-function confirmDelete(song: Song, onConfirm: () => void) {
-  const message = `Delete “${song.title}”? Its audio, analysis and your corrections are removed permanently.`;
+function confirmDelete(song: LocalSong, onConfirm: () => void) {
+  const message = `Delete “${song.title}”? Its MP3, chords and your corrections are removed from this device permanently.`;
   if (Platform.OS === 'web') {
     if (window.confirm(message)) onConfirm();
   } else {
@@ -33,7 +36,7 @@ export default function LibraryScreen() {
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     return (songs.data ?? []).filter(
-      (s) => (view === 'all' || s.is_favourite) && (!q || s.title.toLowerCase().includes(q) || (s.artist ?? '').toLowerCase().includes(q)),
+      (s) => (view === 'all' || s.isFavourite) && (!q || s.title.toLowerCase().includes(q) || (s.artist ?? '').toLowerCase().includes(q)),
     );
   }, [songs.data, query, view]);
 
@@ -41,11 +44,12 @@ export default function LibraryScreen() {
     <Screen maxWidth={880}>
       <View style={styles.header}>
         <View>
-          <Text variant="overline" tone="subtle">{songs.data ? `${songs.data.length} songs` : 'Your library'}</Text>
+          <Text variant="overline" tone="subtle">{songs.data ? `${songs.data.length} ${songs.data.length === 1 ? 'song' : 'songs'} ·${formatBytes(songs.data.reduce((n, s) => n + s.audioBytes, 0))} · ${storage.location}` : 'Your library'}</Text>
           <Text variant="title">My music</Text>
         </View>
         <Button label="Analyse a song" icon="add" onPress={() => router.push('/analyze')} />
       </View>
+      <ImportList />
       <SearchField value={query} onChangeText={setQuery} placeholder="Search your songs" />
       <SegmentedControl label="Filter songs" value={view} onChange={setView} options={[{ value: 'all', label: 'All songs' }, { value: 'favourites', label: 'Favourites' }]} />
 
@@ -56,7 +60,7 @@ export default function LibraryScreen() {
           <EmptyState
             icon={view === 'favourites' ? 'heart-outline' : 'albums-outline'}
             title={songs.data.length === 0 ? 'Your library is empty' : 'Nothing matches'}
-            body={songs.data.length === 0 ? 'Songs you analyse are saved here with their chords, corrections and notes.' : view === 'favourites' ? 'Tap the heart on a song to keep it here.' : 'Try a different search.'}
+            body={songs.data.length === 0 ? 'Songs you analyse are saved on this device as MP3, with their chords, corrections and notes.' : view === 'favourites' ? 'Tap the heart on a song to keep it here.' : 'Try a different search.'}
           />
         </Card>
       )}

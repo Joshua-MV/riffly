@@ -10,7 +10,7 @@ const uriCache = new Map<string, string>();
 let player: AudioPlayer | null = null;
 
 /** Synthesize a strum (cached per voicing) and return a playable URI. */
-function strumUri(frets: Frets): string {
+async function strumUri(frets: Frets): Promise<string> {
   const key = frets.map((f) => (f === null ? 'x' : f)).join('-');
   const cached = uriCache.get(key);
   if (cached) return cached;
@@ -20,7 +20,7 @@ function strumUri(frets: Frets): string {
     uri = URL.createObjectURL(new Blob([wav as BlobPart], { type: 'audio/wav' }));
   } else {
     const file = new File(Paths.cache, `strum-${key}.wav`);
-    if (!file.exists) file.write(wav);
+    if (!file.exists) await file.write(wav);
     uri = file.uri;
   }
   uriCache.set(key, uri);
@@ -28,8 +28,8 @@ function strumUri(frets: Frets): string {
 }
 
 /** Play a voicing as a synthesized guitar strum. */
-export function playVoicing(frets: Frets): void {
-  const uri = strumUri(frets);
+export async function playVoicing(frets: Frets): Promise<void> {
+  const uri = await strumUri(frets);
   if (!player) player = createAudioPlayer({ uri });
   else player.replace({ uri });
   void player.seekTo(0).finally(() => player?.play());

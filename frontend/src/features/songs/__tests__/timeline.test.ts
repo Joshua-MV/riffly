@@ -16,9 +16,9 @@ describe('timeline', () => {
   });
 
   it('applies corrections, then transposition', () => {
-    const t = buildTimeline(segs, [{ id: 'c', analysis_id: 'a', start: 2.5, original_label: 'D', corrected_label: 'D7', created_at: '' }], 2);
+    const t = buildTimeline(segs, [{ start: 2.5, originalLabel: 'D', correctedLabel: 'D7' }], 2);
     expect(t.map((s) => s.display)).toEqual(['N', 'A', 'E7', 'F#m']);
-    expect(t[2].corrected?.id).toBe('c');
+    expect(t[2].corrected?.correctedLabel).toBe('D7');
   });
 
   it('lists upcoming chords, skipping no-chord', () => {

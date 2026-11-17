@@ -1,20 +1,21 @@
 /** Pure helpers for the analysis timeline (unit tested). */
 
+import type { ChordCorrection } from '@/features/library/model';
 import { transposeLabel } from '@/lib/music/chords';
-import type { ChordSegment, Correction } from '@/services/api';
+import type { ChordSegment } from '@/services/api';
 
 export interface TimelineChord extends ChordSegment {
   /** Label shown to the user: correction (if any), then transposition applied. */
   display: string;
-  corrected: Correction | null;
+  corrected: ChordCorrection | null;
 }
 
 /** Merge user corrections over machine estimates and apply transposition. */
-export function buildTimeline(segments: readonly ChordSegment[], corrections: readonly Correction[], transpose: number): TimelineChord[] {
+export function buildTimeline(segments: readonly ChordSegment[], corrections: readonly ChordCorrection[], transpose: number): TimelineChord[] {
   const byStart = new Map(corrections.map((c) => [c.start.toFixed(3), c]));
   return segments.map((s) => {
     const corrected = byStart.get(s.start.toFixed(3)) ?? null;
-    const label = corrected ? corrected.corrected_label : s.label;
+    const label = corrected ? corrected.correctedLabel : s.label;
     return { ...s, corrected, display: transposeLabel(label, transpose) };
   });
 }
@@ -44,6 +45,10 @@ export function upcoming<T extends { display: string; label: string }>(segments:
 export function formatTime(seconds: number): string {
   const s = Math.max(0, Math.floor(seconds));
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+}
+
+export function formatBytes(bytes: number): string {
+  return bytes >= 1048576 ? `${(bytes / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(bytes / 1024))} KB`;
 }
 
 /** Wrap playback back to the loop start when it passes the loop end. */

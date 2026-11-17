@@ -12,6 +12,8 @@
       "supportsTablet": true,
       "bundleIdentifier": "app.riffly",
       "infoPlist": {
+        "UIFileSharingEnabled": true,
+        "LSSupportsOpeningDocumentsInPlace": true,
         "NSMicrophoneUsageDescription": "Riffly uses the microphone to hear your guitar while tuning. Audio is analysed on your device and never recorded or uploaded."
       }
     },
@@ -23,7 +25,9 @@
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
-      "permissions": ["android.permission.RECORD_AUDIO"]
+      "permissions": [
+        "android.permission.RECORD_AUDIO"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png",
@@ -38,7 +42,8 @@
         {
           "microphonePermission": "Riffly uses the microphone to hear your guitar while tuning. Audio is analysed on your device and never recorded or uploaded."
         }
-      ]
+      ],
+      "expo-sharing"
     ],
     "experiments": {
       "typedRoutes": false

@@ -3,28 +3,58 @@
 An all-in-one guitar companion: upload a song to get its chords, key and tempo and play along;
 tune your guitar; learn chords. Built with Expo (iOS, Android, web) and a Python audio engine.
 
-**Everything is free to run.** Every dependency is open source, and no paid API is used. The app
-runs fully on your machine with no account. Supabase (planned for accounts and sync) has a free tier.
+**Free to run. No database. No accounts.** Every dependency is open source and no paid API is
+used. Each user's music lives on their own device as MP3s, and the analysis server keeps
+nothing once it has finished.
 
-## Status: milestone 1 (foundations + all core modules, local mode)
+## How songs are stored
+
+```
+ device                                        analysis server (stateless)
+ ──────                                        ───────────────────────────
+ pick MP3 / WAV / M4A ── upload ─────────────► temp folder
+                                               analyse chords, key, tempo
+                                               convert to MP3 (MP3s pass through untouched)
+ poll ◄──────────────────── result ───────────
+ download MP3 ◄───────────────────────────────
+ save MP3 + chords on the device
+ "forget this job" ── DELETE ────────────────► temp folder deleted
+```
+
+| Platform | Where songs are saved |
+|---|---|
+| iOS | The app's Documents folder (`riffly/songs/<id>.mp3` + `<id>.json`). It is also visible in the Files app under *On My iPhone → Riffly* |
+| Android | The app's private documents folder |
+| Web | The browser's IndexedDB, for this site in this browser |
+
+- Every song has **Save MP3** (phones: the share sheet, e.g. "Save to Files") or **Download MP3** (web), so users can keep a copy outside the app.
+- Corrections, favourites and notes live in the song's JSON record on the device.
+- Saved songs open and play offline. The server is only needed to analyse new songs.
+- The server never keeps anything:
+  - It deletes the upload once processing ends.
+  - It deletes the MP3 when the app collects it, or after 30 minutes otherwise.
+  - It wipes its work folder on startup.
+- **Trade-offs:**
+  - There is no sync between devices.
+  - Deleting the app, or clearing the site's data in the browser, deletes the library. Exported MP3s are kept.
+
+## Status
 
 | Module | State | Verified |
 |---|---|---|
 | Design system (dark default + light), responsive nav (bottom tabs ↔ sidebar ≥ 1024 px) | ✅ | Web, desktop and phone widths |
-| **Tuner**: YIN pitch detection, 5 tuning presets, string lock, A4 reference, stability | ✅ | Unit tests (±2 cents, E2–E5). Web: real Web Audio mic path tested with a synthetic input signal |
-| **Chord library**: 108 chords × 9 qualities, 1–4 voicings each, diagrams, instructions, synthesized strum | ✅ | Every voicing checked by tests (all notes are chord tones, root in the bass, playable span) |
-| **Song analyzer**: upload (drag-drop/file picker), validation, background analysis, chords/key/BPM | ✅ | 17 backend tests + browser end-to-end |
-| **Play along**: synced current/next chord, waveform seek, speed (pitch kept), A–B loop, transpose, corrections | ✅ | Browser end-to-end |
-| **My Music**: library, favourites, search, delete, corrections | ✅ (local) | Browser |
-| Accounts + cross-device sync (Supabase Auth/Storage, RLS) | Schema written, not wired up | — |
-| iOS/Android builds | Code paths written | **Not yet run on a device** |
+| **Tuner**: YIN pitch detection, 5 tuning presets, string lock, A4 reference, stability | ✅ | Unit tests (±2 cents). Web mic path tested with a synthetic input signal |
+| **Chord library**: 108 chords, diagrams, instructions, synthesized strum | ✅ | Every voicing checked by tests |
+| **Song analyzer**: upload, background analysis, MP3 conversion, save on device | ✅ | 20 backend tests + browser end-to-end |
+| **Play along**: synced chords, waveform seek, speed (pitch kept), A–B loop, transpose, corrections | ✅ | Browser end-to-end, including playback with the server off |
+| **My Music**: on-device library, favourites, search, delete, MP3 export | ✅ | Browser (IndexedDB) |
+| iOS/Android | Code paths written and type-checked | **Not yet run on a device** |
 
 ## Quick start
 
 Requirements: Node.js 20+ and Python 3.11+. FFmpeg is optional (needed only for M4A uploads).
 
 ```bash
-# Backend (port 8000)
 cd backend
 python -m venv .venv
 .venv\Scripts\activate            # macOS/Linux: source .venv/bin/activate
@@ -33,21 +63,15 @@ uvicorn app.main:app --reload --port 8000
 ```
 
 ```bash
-# App (web on port 8081; press i / a for simulators)
 cd frontend
 npm install
 npx expo start --web
 ```
 
-The tuner and chord library work without the backend. On a physical phone, set
-`EXPO_PUBLIC_API_URL=http://<your-computer-LAN-IP>:8000` in `frontend/.env`.
+On a physical phone, set `EXPO_PUBLIC_API_URL=http://<your-computer-LAN-IP>:8000` in `frontend/.env`.
 
-### Native microphone
-
-The tuner reads microphone audio through `expo-audio`'s real-time PCM stream (`useAudioStream`).
-On the web it uses the Web Audio API instead, because expo-audio's web stream is a stub. The
-native path compiles and type-checks but has not yet been run on a device. If Expo Go lacks the
-module, build a free local development build with `npx expo run:android` or `npx expo run:ios`.
+The native tuner uses `expo-audio`'s real-time microphone stream. If Expo Go lacks it, build a
+free local development build with `npx expo run:android` or `npx expo run:ios`.
 
 ## Tests
 
@@ -62,65 +86,45 @@ cd backend
 pytest
 ```
 
-Frontend: 141 tests (notes, tunings, chord theory, every voicing in the library, YIN accuracy,
-the tuner state machine, Karplus–Strong synthesis, timeline logic).
-Backend: 17 tests (chord recognition, key, tempo and progression on synthesized audio with exact
-ground truth; the API end to end with real background analysis; upload validation; isolation
-between users).
+Frontend: 146 tests. They cover music theory, every chord voicing, YIN accuracy, the tuner, the
+synthesizer, the timeline, and the on-device library model.
 
-## Configuration
+Backend: 20 tests. They cover chord, key and tempo accuracy on synthesized audio; upload →
+analysis → MP3 → delete; MP3 pass-through; rejecting bad uploads; job expiry; the optional API
+key; and wiping state on startup.
 
-`backend/.env` (see `backend/.env.example`): `AUTH_MODE`, `DATA_DIR`, `CORS_ORIGINS`,
-`MAX_UPLOAD_MB`, `MAX_DURATION_MINUTES`, `ANALYSIS_WORKERS`. `AUTH_MODE=local` is refused when
-`APP_ENV=production`.
-
-`frontend/.env`: `EXPO_PUBLIC_API_URL`. Anything prefixed `EXPO_PUBLIC_` ends up in the app
-bundle, so never put secrets there.
-
-## Layout
-
-```
-frontend/app/          routes (expo-router): (tabs)/{index,analyze,tuner,chords,library}, song/[id], chord/[id], profile
-frontend/src/lib/      pure, tested logic: music theory, voicings, YIN, tuner engine, synthesis
-frontend/src/features/ tuner (mic adapters per platform), songs (API hooks, upload, playback, timeline)
-frontend/src/theme/    design tokens, theme provider, responsive breakpoints
-backend/app/audio/     chord recognition, key, tempo, pipeline
-backend/app/           FastAPI app, auth, repository (SQLite now, Supabase next), job queue, uploads
-supabase/migrations/   Postgres schema with Row Level Security and storage policies
-docs/                  PLAN.md (architecture, milestones, risks), AUDIO_ENGINE.md (method, accuracy, limits)
-```
-
-## API
+## Analysis API (stateless)
 
 Interactive docs at `http://localhost:8000/docs` while the backend runs.
 
 | Method | Path | |
 |---|---|---|
-| GET | `/api/health` | Engine version, auth mode |
-| GET | `/api/songs` | Your songs with status, key and BPM |
-| POST | `/api/songs` | Multipart upload (`file`, `title?`, `artist?`, `analyze=true`). 413/415 on bad input |
-| GET / PATCH / DELETE | `/api/songs/{id}` | Detail (with analysis and corrections) / title, artist, notes, favourite / delete |
-| POST | `/api/songs/{id}/analyze` | Re-run analysis (409 if already running) |
-| GET | `/api/songs/{id}/analysis` | Status: `uploaded → queued → processing → completed / failed` |
-| GET | `/api/songs/{id}/audio` | Audio with HTTP Range support |
-| PUT / DELETE | `/api/songs/{id}/corrections[/{cid}]` | Correct a chord segment / revert a correction |
+| GET | `/api/health` | Engine version |
+| POST | `/api/analyses` | Multipart upload (`file`, `title?`) → `202` job. 413/415 on bad input, 503 when busy |
+| GET | `/api/analyses/{id}` | `processing / completed / failed`, plus the result and `audio_url` when done |
+| GET | `/api/analyses/{id}/audio` | The MP3 |
+| DELETE | `/api/analyses/{id}` | Forget the job and delete its files |
 
-The chord library runs entirely in the app (it works offline), so there is no `/api/chords` endpoint.
+Job ids are random UUIDs, so only the app that created a job can fetch it. If the server is
+reachable from the internet, set `API_KEY` on the server and the same `EXPO_PUBLIC_API_KEY`
+in the app.
+
+## Layout
+
+```
+frontend/app/            routes: (tabs)/{index,analyze,tuner,chords,library}, song/[id], chord/[id], profile
+frontend/src/features/   library/ (on-device storage: web IndexedDB + native files, importer), songs/, tuner/
+frontend/src/lib/        pure, tested logic: music theory, voicings, YIN, tuner engine, synthesis
+backend/app/             FastAPI app, in-memory job store, upload validation
+backend/app/audio/       chord recognition, key, tempo, MP3 conversion
+docs/                    PLAN.md, AUDIO_ENGINE.md
+```
 
 ## Known limitations
 
-- Chord recognition uses a DSP baseline (major/minor triads). It handles clean harmony well. It
-  will mislabel 7ths and extended chords as triads, and is less accurate on dense, distorted or
-  vocal-heavy mixes. See [docs/AUDIO_ENGINE.md](docs/AUDIO_ENGINE.md).
-- The job queue runs in-process and is not durable: jobs interrupted by a restart are marked
-  failed with a retry hint.
+- Chord recognition is a DSP baseline (major/minor triads). See [docs/AUDIO_ENGINE.md](docs/AUDIO_ENGINE.md).
+- Jobs live in server memory: restarting the server cancels in-flight analyses, and the app
+  shows a "failed, try again" message.
 - M4A uploads need FFmpeg on the server.
-- Accounts are not implemented yet: local mode stores everything for one developer user.
-
-## Next milestones
-
-1. Supabase Auth + a Supabase repository (the schema and RLS are ready) and sign-in UI.
-2. Run the native mic path on iOS/Android hardware; test low strings and noisy rooms.
-3. Optional Demucs (MIT) source separation before chroma, plus 7th-chord templates; evaluate on
-   annotated data with `scripts/evaluate.py`.
-4. A durable queue (Redis + arq), Docker image with FFmpeg, and free-tier deployment.
+- Web storage can be evicted by the browser under heavy disk pressure. Riffly asks for
+  persistent storage, but browsers may still decline.

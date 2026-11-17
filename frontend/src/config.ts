@@ -11,6 +11,8 @@ function defaultApiUrl(): string {
 
 export const config = {
   apiUrl: (process.env.EXPO_PUBLIC_API_URL ?? defaultApiUrl()).replace(/\/$/, ''),
+  /** Optional key for a shared analysis server. It ships inside the app, so it only deters casual misuse. */
+  apiKey: process.env.EXPO_PUBLIC_API_KEY || null,
   maxUploadMb: 50,
   supportedFormats: ['MP3', 'WAV', 'M4A'] as const,
 };

@@ -1,8 +1,10 @@
-/** Typed client for the Riffly FastAPI backend. Mirrors backend/app/schemas.py. */
+/**
+ * Client for the stateless Riffly analysis server (backend/app/routers/analyses.py).
+ * The server keeps nothing: the app uploads a song, polls for the result, downloads the
+ * MP3, saves everything on the device, then tells the server to forget the job.
+ */
 
 import { config } from '@/config';
-
-export type AnalysisStatus = 'uploaded' | 'queued' | 'processing' | 'completed' | 'failed';
 
 export interface ChordSegment {
   start: number;
@@ -28,47 +30,17 @@ export interface AnalysisResult {
   notes: string[];
 }
 
-export interface Analysis {
-  id: string;
-  song_id: string;
-  status: AnalysisStatus;
-  error: string | null;
-  model_version: string | null;
-  created_at: string;
-  completed_at: string | null;
-  result: AnalysisResult | null;
-}
+export type JobStatus = 'processing' | 'completed' | 'failed';
 
-export interface Correction {
-  id: string;
-  analysis_id: string;
-  start: number;
-  original_label: string;
-  corrected_label: string;
-  created_at: string;
-}
-
-export interface Song {
+export interface Job {
   id: string;
   title: string;
-  artist: string | null;
   original_filename: string;
-  content_type: string;
-  size_bytes: number;
-  duration: number | null;
-  is_favourite: boolean;
-  notes: string | null;
-  created_at: string;
-  updated_at: string;
-  status: AnalysisStatus;
-  key: string | null;
-  bpm: number | null;
-}
-
-export interface SongDetail extends Song {
-  audio_url: string;
-  analysis: Analysis | null;
-  corrections: Correction[];
+  status: JobStatus;
+  error: string | null;
+  result: AnalysisResult | null;
+  audio_url: string | null;
+  audio_bytes: number | null;
 }
 
 export class ApiError extends Error {
@@ -77,41 +49,50 @@ export class ApiError extends Error {
   }
 }
 
-async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
+const unreachable = () => new ApiError(0, `Can't reach the Riffly analysis server at ${config.apiUrl}. Is it running?`);
+
+function authHeaders(): Record<string, string> {
+  return config.apiKey ? { 'X-API-Key': config.apiKey } : {};
+}
+
+async function errorFrom(res: Response): Promise<ApiError> {
+  let detail = res.statusText || `Request failed (${res.status})`;
+  try {
+    const body = await res.json();
+    if (typeof body.detail === 'string') detail = body.detail;
+  } catch {
+    /* non-JSON body */
+  }
+  return new ApiError(res.status, detail);
+}
+
+async function send(path: string, init: RequestInit = {}): Promise<Response> {
   let res: Response;
   try {
-    res = await fetch(`${config.apiUrl}${path}`, {
+    res = await fetch(path.startsWith('http') ? path : `${config.apiUrl}${path}`, {
       ...init,
-      headers: { 'Content-Type': 'application/json', ...(init.headers ?? {}) },
+      headers: { ...authHeaders(), ...(init.headers ?? {}) },
     });
   } catch {
-    throw new ApiError(0, `Can't reach the Riffly server at ${config.apiUrl}. Is the backend running?`);
+    throw unreachable();
   }
-  if (!res.ok) {
-    let detail = res.statusText;
-    try {
-      const body = await res.json();
-      detail = typeof body.detail === 'string' ? body.detail : JSON.stringify(body.detail);
-    } catch {
-      /* non-JSON error body */
-    }
-    throw new ApiError(res.status, detail);
-  }
-  return (res.status === 204 ? undefined : await res.json()) as T;
+  if (!res.ok) throw await errorFrom(res);
+  return res;
 }
 
 export const api = {
-  listSongs: () => request<Song[]>('/api/songs'),
-  getSong: (id: string) => request<SongDetail>(`/api/songs/${id}`),
-  updateSong: (id: string, body: Partial<Pick<Song, 'title' | 'artist' | 'notes' | 'is_favourite'>>) =>
-    request<SongDetail>(`/api/songs/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
-  deleteSong: (id: string) => request<void>(`/api/songs/${id}`, { method: 'DELETE' }),
-  reanalyze: (id: string) => request<Analysis>(`/api/songs/${id}/analyze`, { method: 'POST' }),
-  correctChord: (id: string, body: { start: number; original_label: string; corrected_label: string }) =>
-    request<Correction>(`/api/songs/${id}/corrections`, { method: 'PUT', body: JSON.stringify(body) }),
-  revertCorrection: (songId: string, correctionId: string) =>
-    request<void>(`/api/songs/${songId}/corrections/${correctionId}`, { method: 'DELETE' }),
-  health: () => request<{ status: string; engine: string }>('/api/health'),
+  health: async () => (await send('/api/health')).json() as Promise<{ status: string; engine: string }>,
+  getJob: async (id: string) => (await send(`/api/analyses/${id}`)).json() as Promise<Job>,
+  /** Download the MP3 the server produced. */
+  downloadAudio: async (url: string) => (await send(url)).arrayBuffer(),
+  /** Tell the server to delete the job's files. Failure is harmless: jobs expire anyway. */
+  forgetJob: async (id: string) => {
+    try {
+      await send(`/api/analyses/${id}`, { method: 'DELETE' });
+    } catch {
+      /* expires on its own */
+    }
+  },
 };
 
 /** A file chosen by the user: a web File, or a native file URI. */
@@ -120,18 +101,19 @@ export type UploadSource =
   | { kind: 'native'; uri: string; name: string; mimeType: string };
 
 /** Multipart upload with progress (XHR is the only cross-platform API with upload progress). */
-export function uploadSong(
+export function uploadForAnalysis(
   source: UploadSource,
-  fields: { title?: string },
+  title: string,
   onProgress: (fraction: number) => void,
-): { promise: Promise<SongDetail>; abort: () => void } {
+): { promise: Promise<Job>; abort: () => void } {
   const xhr = new XMLHttpRequest();
-  const promise = new Promise<SongDetail>((resolve, reject) => {
+  const promise = new Promise<Job>((resolve, reject) => {
     const form = new FormData();
     if (source.kind === 'web') form.append('file', source.file, source.name);
     else form.append('file', { uri: source.uri, name: source.name, type: source.mimeType } as unknown as Blob);
-    if (fields.title) form.append('title', fields.title);
-    xhr.open('POST', `${config.apiUrl}/api/songs`);
+    form.append('title', title);
+    xhr.open('POST', `${config.apiUrl}/api/analyses`);
+    for (const [k, v] of Object.entries(authHeaders())) xhr.setRequestHeader(k, v);
     xhr.upload.onprogress = (e) => e.lengthComputable && onProgress(e.loaded / e.total);
     xhr.onload = () => {
       let body: unknown = null;
@@ -140,10 +122,10 @@ export function uploadSong(
       } catch {
         /* handled below */
       }
-      if (xhr.status >= 200 && xhr.status < 300) resolve(body as SongDetail);
+      if (xhr.status >= 200 && xhr.status < 300) resolve(body as Job);
       else reject(new ApiError(xhr.status, (body as { detail?: string } | null)?.detail ?? `Upload failed (${xhr.status})`));
     };
-    xhr.onerror = () => reject(new ApiError(0, `Can't reach the Riffly server at ${config.apiUrl}. Is the backend running?`));
+    xhr.onerror = () => reject(unreachable());
     xhr.onabort = () => reject(new ApiError(0, 'Upload cancelled'));
     xhr.send(form);
   });

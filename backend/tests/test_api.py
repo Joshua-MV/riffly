@@ -1,4 +1,4 @@
-"""API integration tests: real uploads, real background analysis, user isolation."""
+"""API integration tests: real uploads, real background analysis + MP3 conversion, cleanup."""
 
 from __future__ import annotations
 
@@ -10,7 +10,6 @@ import numpy as np
 import pytest
 from fastapi.testclient import TestClient
 
-from app.auth import CurrentUser, get_current_user
 from app.config import Settings
 from app.main import create_app
 
@@ -27,110 +26,124 @@ def _wav_bytes(y: np.ndarray) -> bytes:
     return buf.getvalue()
 
 
+def _settings(tmp_path, **kw) -> Settings:
+    base = dict(
+        app_env="test", work_dir=tmp_path / "work", analysis_executor="thread",
+        analysis_workers=1, max_upload_mb=5,
+    )
+    return Settings(**{**base, **kw})
+
+
 @pytest.fixture()
 def client(tmp_path):
-    settings = Settings(
-        app_env="test", data_dir=tmp_path, analysis_executor="thread", analysis_workers=1,
-        max_upload_mb=5,
-    )
-    app = create_app(settings)
-    with TestClient(app) as c:
+    with TestClient(create_app(_settings(tmp_path))) as c:
         yield c
 
 
-def _wait_for(client: TestClient, song_id: str, timeout: float = 120) -> dict:
+def _wait_for(client: TestClient, job_id: str, timeout: float = 120) -> dict:
     deadline = time.time() + timeout
     while time.time() < deadline:
-        body = client.get(f"/api/songs/{song_id}/analysis").json()
+        body = client.get(f"/api/analyses/{job_id}").json()
         if body["status"] in {"completed", "failed"}:
             return body
-        time.sleep(0.25)
+        time.sleep(0.2)
     raise TimeoutError("analysis did not finish")
 
 
+def _is_mp3(data: bytes) -> bool:
+    return data[:3] == b"ID3" or (data[0] == 0xFF and (data[1] & 0xE0) == 0xE0)
+
+
 def test_health(client):
-    assert client.get("/api/health").json()["status"] == "ok"
+    body = client.get("/api/health").json()
+    assert body["status"] == "ok" and body["api_key_required"] is False
 
 
-def test_upload_analyse_correct_delete(client):
+def test_wav_is_analysed_converted_to_mp3_and_forgotten(client, tmp_path):
     y, _ = render_progression(["C", "G", "Am", "F"], bpm=110, repeats=2)
-    res = client.post(
-        "/api/songs",
-        files={"file": ("demo.wav", _wav_bytes(y), "audio/wav")},
-        data={"title": "Synth demo"},
-    )
-    assert res.status_code == 201, res.text
-    song = res.json()
-    assert song["title"] == "Synth demo"
-    assert song["status"] in {"queued", "processing"}
+    res = client.post("/api/analyses", files={"file": ("demo.wav", _wav_bytes(y), "audio/wav")}, data={"title": "Synth demo"})
+    assert res.status_code == 202, res.text
+    job = res.json()
+    assert job["status"] == "processing" and job["title"] == "Synth demo"
 
-    analysis = _wait_for(client, song["id"])
-    assert analysis["status"] == "completed", analysis
-    result = analysis["result"]
-    labels = {c["label"] for c in result["chords"]}
-    assert {"C", "G", "Am", "F"} <= labels
+    done = _wait_for(client, job["id"])
+    assert done["status"] == "completed", done
+    result = done["result"]
+    assert {"C", "G", "Am", "F"} <= {c["label"] for c in result["chords"]}
     assert result["bpm"] and abs(result["bpm"] - 110) < 4
+    assert done["audio_url"] and done["audio_bytes"] > 0
 
-    listed = client.get("/api/songs").json()
-    assert listed[0]["key"] == result["key"]
-    assert listed[0]["duration"] == pytest.approx(result["duration"])
+    audio = client.get(f"/api/analyses/{job['id']}/audio")
+    assert audio.status_code == 200
+    assert audio.headers["content-type"] == "audio/mpeg"
+    assert "Synth%20demo.mp3" in audio.headers["content-disposition"]
+    assert _is_mp3(audio.content)
+    # 192 kbps MP3 is much smaller than 16-bit WAV.
+    assert len(audio.content) < len(_wav_bytes(y)) / 2
 
-    # Range requests are needed for seeking in browsers.
-    audio = client.get(f"/api/songs/{song['id']}/audio", headers={"Range": "bytes=0-99"})
-    assert audio.status_code == 206 and len(audio.content) == 100
+    # The upload itself is deleted as soon as processing ends; only the MP3 remains.
+    folder = tmp_path / "work" / job["id"]
+    assert [p.name for p in folder.iterdir()] == ["audio.mp3"]
 
-    seg = next(c for c in result["chords"] if c["label"] != "N")
-    corr = client.put(
-        f"/api/songs/{song['id']}/corrections",
-        json={"start": seg["start"], "original_label": seg["label"], "corrected_label": "Cmaj7"},
-    )
-    assert corr.status_code == 200, corr.text
-    again = client.put(
-        f"/api/songs/{song['id']}/corrections",
-        json={"start": seg["start"], "original_label": seg["label"], "corrected_label": "C7"},
-    ).json()
-    detail = client.get(f"/api/songs/{song['id']}").json()
-    assert [c["corrected_label"] for c in detail["corrections"]] == ["C7"]
-    assert client.delete(f"/api/songs/{song['id']}/corrections/{again['id']}").status_code == 204
-
-    fav = client.patch(f"/api/songs/{song['id']}", json={"is_favourite": True, "notes": "capo 2"})
-    assert fav.json()["is_favourite"] is True and fav.json()["notes"] == "capo 2"
-
-    assert client.delete(f"/api/songs/{song['id']}").status_code == 204
-    assert client.get(f"/api/songs/{song['id']}").status_code == 404
+    assert client.delete(f"/api/analyses/{job['id']}").status_code == 204
+    assert not folder.exists()
+    assert client.get(f"/api/analyses/{job['id']}").status_code == 404
 
 
-def test_rejects_non_audio(client):
-    res = client.post("/api/songs", files={"file": ("x.mp3", b"<html>not audio</html>", "audio/mpeg")})
+def test_mp3_upload_is_passed_through_unchanged(client):
+    from app.audio.mp3 import encode_mp3
+
+    y, _ = render_progression(["G", "D"], repeats=1)
+    mp3 = encode_mp3(y, SR)
+    job = client.post("/api/analyses", files={"file": ("song.mp3", mp3, "audio/mpeg")}).json()
+    done = _wait_for(client, job["id"])
+    assert done["status"] == "completed", done
+    assert client.get(f"/api/analyses/{job['id']}/audio").content == mp3
+
+
+def test_rejects_non_audio(client, tmp_path):
+    res = client.post("/api/analyses", files={"file": ("x.mp3", b"<html>not audio</html>", "audio/mpeg")})
     assert res.status_code == 415
+    assert list((tmp_path / "work").iterdir()) == []  # nothing left behind
 
 
-def test_rejects_oversized_upload(client):
+def test_rejects_oversized_upload(client, tmp_path):
     big = b"RIFF\x00\x00\x00\x00WAVEfmt " + b"\x00" * (6 * 1024 * 1024)
-    res = client.post("/api/songs", files={"file": ("big.wav", big, "audio/wav")})
-    assert res.status_code == 413
+    assert client.post("/api/analyses", files={"file": ("big.wav", big, "audio/wav")}).status_code == 413
+    assert list((tmp_path / "work").iterdir()) == []
 
 
 def test_corrupt_audio_fails_cleanly(client):
     fake = b"RIFF\x24\x00\x00\x00WAVEfmt " + b"\x00" * 64
-    song = client.post("/api/songs", files={"file": ("bad.wav", fake, "audio/wav")}).json()
-    analysis = _wait_for(client, song["id"])
-    assert analysis["status"] == "failed"
-    assert "decode" in analysis["error"].lower()
+    job = client.post("/api/analyses", files={"file": ("bad.wav", fake, "audio/wav")}).json()
+    done = _wait_for(client, job["id"])
+    assert done["status"] == "failed"
+    assert "decode" in done["error"].lower()
+    assert done["audio_url"] is None
 
 
-def test_users_cannot_see_each_others_songs(client):
-    y, _ = render_progression(["C", "G"], repeats=1)
-    owner = CurrentUser(id="user-a")
-    intruder = CurrentUser(id="user-b")
-    app = client.app
-    app.dependency_overrides[get_current_user] = lambda: owner
-    song = client.post(
-        "/api/songs", files={"file": ("a.wav", _wav_bytes(y), "audio/wav")}, data={"analyze": "false"}
-    ).json()
-    app.dependency_overrides[get_current_user] = lambda: intruder
-    assert client.get(f"/api/songs/{song['id']}").status_code == 404
-    assert client.get(f"/api/songs/{song['id']}/audio").status_code == 404
-    assert client.delete(f"/api/songs/{song['id']}").status_code == 404
-    assert client.get("/api/songs").json() == []
-    app.dependency_overrides.pop(get_current_user)
+def test_jobs_expire(tmp_path):
+    with TestClient(create_app(_settings(tmp_path, job_ttl_minutes=0))) as c:
+        y, _ = render_progression(["C", "G"], repeats=1)
+        job = c.post("/api/analyses", files={"file": ("a.wav", _wav_bytes(y), "audio/wav")}).json()
+        time.sleep(0.05)
+        deadline = time.time() + 60
+        while c.get(f"/api/analyses/{job['id']}").status_code == 200 and time.time() < deadline:
+            time.sleep(0.2)
+        assert c.get(f"/api/analyses/{job['id']}").status_code == 404
+
+
+def test_api_key_is_enforced_when_configured(tmp_path):
+    with TestClient(create_app(_settings(tmp_path, api_key="s3cret"))) as c:
+        assert c.get("/api/analyses/x").status_code == 401
+        assert c.get("/api/analyses/x", headers={"X-API-Key": "wrong"}).status_code == 401
+        assert c.get("/api/analyses/x", headers={"X-API-Key": "s3cret"}).status_code == 404
+        assert c.get("/api/health").status_code == 200
+
+
+def test_state_is_wiped_on_startup(tmp_path):
+    leftover = tmp_path / "work" / "old-job"
+    leftover.mkdir(parents=True)
+    (leftover / "audio.mp3").write_bytes(b"x")
+    with TestClient(create_app(_settings(tmp_path))):
+        assert not leftover.exists()
