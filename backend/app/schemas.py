@@ -47,5 +47,26 @@ class JobOut(BaseModel):
     audio_bytes: int | None = None
 
 
+class NoteOut(BaseModel):
+    start: float
+    end: float
+    midi: int
+    velocity: float
+
+
+class TranscriptionOut(BaseModel):
+    notes: list[NoteOut]
+    source: str
+    model_version: str
+    processing_seconds: float
+
+
+class TranscriptionJobOut(BaseModel):
+    id: str
+    status: JobStatus
+    error: str | None = None
+    result: TranscriptionOut | None = None
+
+
 class ErrorOut(BaseModel):
     detail: str

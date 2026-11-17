@@ -95,5 +95,5 @@ def job_audio(job_id: str, store: StoreDep) -> FileResponse:
     summary="Forget a job and delete its files (call after saving to the device)",
 )
 def delete_job(job_id: str, store: StoreDep) -> None:
-    if not store.delete(job_id):
+    if not store.get(job_id) or not store.delete(job_id):
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Unknown or expired job")

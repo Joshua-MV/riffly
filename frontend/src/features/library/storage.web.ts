@@ -107,6 +107,10 @@ export const storage: SongStorage = {
     return url;
   },
 
+  async uploadSource(song) {
+    return { kind: 'web', file: await audioBlob(song.id), name: exportFilename(song) };
+  },
+
   async exportMp3(song) {
     const url = URL.createObjectURL(await audioBlob(song.id));
     const a = document.createElement('a');

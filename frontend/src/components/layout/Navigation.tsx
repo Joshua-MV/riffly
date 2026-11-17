@@ -63,7 +63,7 @@ export function BottomTabBar({ activeName, onNavigate }: TabBarProps) {
   );
 }
 
-export function Sidebar({ activeName, onNavigate }: TabBarProps) {
+export function Sidebar({ activeName, onNavigate, footer }: TabBarProps & { footer?: React.ReactNode }) {
   const { colors } = useTheme();
   return (
     <View style={[styles.sidebar, { backgroundColor: colors.backgroundRaised, borderRightColor: colors.border }]}>
@@ -96,6 +96,7 @@ export function Sidebar({ activeName, onNavigate }: TabBarProps) {
         })}
       </View>
       <View style={{ flex: 1 }} />
+      {footer}
       <Pressable
         role="link"
         accessibilityLabel="Profile and settings"

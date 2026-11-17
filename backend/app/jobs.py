@@ -32,6 +32,17 @@ def process_upload(upload_path: str, mp3_path: str, max_duration: float) -> dict
     return result
 
 
+def process_transcription(upload_path: str, _mp3_path: str, max_duration: float) -> dict:
+    from .audio.pipeline import load_audio
+    from .audio.transcribe import transcribe_file
+
+    load_audio(Path(upload_path), max_duration)  # validates decodability and length
+    return transcribe_file(Path(upload_path))
+
+
+WORKERS = {"analysis": process_upload, "transcription": process_transcription}
+
+
 @dataclass
 class Job:
     id: str
@@ -39,6 +50,7 @@ class Job:
     original_filename: str
     folder: Path
     upload_path: Path
+    kind: str = "analysis"  # analysis | transcription
     status: str = "processing"  # processing | completed | failed
     error: str | None = None
     result: dict | None = None
@@ -82,15 +94,20 @@ class JobStore:
     def discard_folder(self, folder: Path) -> None:
         shutil.rmtree(folder, ignore_errors=True)
 
-    def submit(self, job_id: str, folder: Path, upload_path: Path, title: str, filename: str) -> Job:
+    def submit(
+        self, job_id: str, folder: Path, upload_path: Path, title: str, filename: str,
+        kind: str = "analysis", max_duration: float | None = None,
+    ) -> Job:
         self.purge_expired()
         with self._lock:
             active = sum(1 for j in self._jobs.values() if j.status == "processing")
             if active >= self.max_active:
                 raise JobQueueFull
-            job = Job(job_id, title, filename, folder, upload_path)
+            job = Job(job_id, title, filename, folder, upload_path, kind=kind)
             self._jobs[job_id] = job
-        future = self.executor.submit(process_upload, str(upload_path), str(job.mp3_path), self.max_duration)
+        future = self.executor.submit(
+            WORKERS[kind], str(upload_path), str(job.mp3_path), max_duration or self.max_duration
+        )
         future.add_done_callback(lambda f: self._finish(job, f))
         return job
 
@@ -98,7 +115,7 @@ class JobStore:
         try:
             result = future.result()
             job.result, job.status = result, "completed"
-        except (AudioDecodeError, AudioTooLongError) as exc:
+        except (AudioDecodeError, AudioTooLongError, RuntimeError) as exc:
             job.error, job.status = str(exc), "failed"
         except Exception:  # noqa: BLE001 - a crashed worker must surface as a failed job
             log.exception("job %s crashed", job.id)
@@ -107,10 +124,11 @@ class JobStore:
             job.finished_at = time.time()
             job.upload_path.unlink(missing_ok=True)  # only the MP3 is needed from here on
 
-    def get(self, job_id: str) -> Job | None:
+    def get(self, job_id: str, kind: str = "analysis") -> Job | None:
         self.purge_expired()
         with self._lock:
-            return self._jobs.get(job_id)
+            job = self._jobs.get(job_id)
+        return job if job and job.kind == kind else None
 
     def delete(self, job_id: str) -> bool:
         with self._lock:

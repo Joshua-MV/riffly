@@ -6,6 +6,7 @@ import { ChordDiagram } from '@/components/music/ChordDiagram';
 import { Button, IconButton } from '@/components/ui/Button';
 import { Card, Chip, EmptyState, Screen } from '@/components/ui/primitives';
 import { Text } from '@/components/ui/Text';
+import { MiniPlayer } from '@/features/player/MiniPlayer';
 import { playVoicing } from '@/lib/audio/chordPlayer';
 import { chordTones, formatChord, parseChordId, QUALITIES } from '@/lib/music/chords';
 import { pitchClassName } from '@/lib/music/notes';
@@ -56,6 +57,7 @@ export default function ChordDetailScreen() {
   const name = formatChord(chord);
 
   return (
+    <View style={{ flex: 1 }}>
     <Screen maxWidth={880}>
       <View style={styles.top}>
         <IconButton icon="arrow-back" label="Back" onPress={() => (router.canGoBack() ? router.back() : router.replace('/chords'))} />
@@ -115,6 +117,8 @@ export default function ChordDetailScreen() {
         </View>
       </View>
     </Screen>
+    <MiniPlayer />
+    </View>
   );
 }
 

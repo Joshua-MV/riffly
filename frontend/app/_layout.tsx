@@ -9,6 +9,7 @@ import { useState } from 'react';
 import { View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
+import { PlayerProvider } from '@/features/player/PlayerProvider';
 import { ThemeProvider, useTheme } from '@/theme/ThemeProvider';
 
 function AppStack() {
@@ -41,7 +42,9 @@ export default function RootLayout() {
     <SafeAreaProvider>
       <QueryClientProvider client={queryClient}>
         <ThemeProvider>
-          <AppStack />
+          <PlayerProvider>
+            <AppStack />
+          </PlayerProvider>
         </ThemeProvider>
       </QueryClientProvider>
     </SafeAreaProvider>

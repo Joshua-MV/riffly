@@ -9,10 +9,11 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
+from .audio import transcribe
 from .audio.pipeline import ENGINE_VERSION
 from .config import Settings, get_settings
 from .jobs import JobStore
-from .routers import analyses
+from .routers import analyses, transcriptions
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -54,7 +55,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     async def require_api_key(request: Request, call_next):  # type: ignore[no-untyped-def]
         if (
             settings.api_key
-            and request.url.path.startswith("/api/analyses")
+            and request.url.path.startswith(("/api/analyses", "/api/transcriptions"))
             and request.method != "OPTIONS"
             and not secrets.compare_digest(request.headers.get("x-api-key", ""), settings.api_key)
         ):
@@ -63,10 +64,16 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     app.dependency_overrides[get_settings] = lambda: settings
     app.include_router(analyses.router)
+    app.include_router(transcriptions.router)
 
     @app.get("/api/health", tags=["health"])
     def health() -> dict[str, str | bool]:
-        return {"status": "ok", "engine": ENGINE_VERSION, "api_key_required": bool(settings.api_key)}
+        return {
+            "status": "ok",
+            "engine": ENGINE_VERSION,
+            "api_key_required": bool(settings.api_key),
+            "transcription_available": transcribe.available(),
+        }
 
     return app
 

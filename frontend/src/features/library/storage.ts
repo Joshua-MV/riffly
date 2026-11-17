@@ -65,6 +65,10 @@ export const storage: SongStorage = {
     return f.uri;
   },
 
+  async uploadSource(song) {
+    return { kind: 'native', uri: await storage.audioUri(song.id), name: exportFilename(song), mimeType: 'audio/mpeg' };
+  },
+
   async exportMp3(song) {
     // Share a copy with a friendly name ("Artist - Title.mp3").
     const copy = new File(Paths.cache, exportFilename(song));

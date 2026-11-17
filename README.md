@@ -38,6 +38,20 @@ nothing once it has finished.
   - There is no sync between devices.
   - Deleting the app, or clearing the site's data in the browser, deletes the library. Exported MP3s are kept.
 
+## Practising a song
+
+Open any analysed song and everything below works while it plays. One shared player keeps the
+song going as you move around the app, and a mini player shows the current chord on every screen.
+
+| Feature | What it does |
+|---|---|
+| **Make it easier** | Tries every capo position and suggests the one with the easiest shapes, e.g. Ab–Eb–Fm–Db becomes *capo 1: G–D–Em–C, no barre chords*. The recording stays in its real key, so you can still play along. You can also change the key yourself, with a warning that it won't match the recording. |
+| **Chords** | A timeline synced to playback, with the current and next chords plus a diagram, a loop for the current phrase, speeds of 0.5–1× that keep the pitch, and corrections. |
+| **Fingerpicking tab** | Generated from the song's chords and beat in three patterns: simple arpeggio, pinch (both beginner) and Travis picking (intermediate). It scrolls in sync and highlights the note to play now. Tap a bar to jump there. It is an *arrangement* in the song's style, not a note-for-note copy. |
+| **Learn** | Every chord shape in the song with diagrams, sound and how much of the song it covers. A chord-change drill switches between the song's most common pairs every bar against a click. A metronome is also included. |
+| **Tempo** | The song's tempo, beat dots synced to the music (beat 1 lands on the chord changes), an optional one-bar count-in before playback, and practice speeds. |
+| **Transcribe (beta)** | Experimental. Separates the guitar with Demucs and detects its notes with Basic Pitch, then lays them out as tab on the same synced grid, respecting the capo. Slow (minutes) and imperfect on full band mixes; labelled as a sketch. |
+
 ## Status
 
 | Module | State | Verified |
@@ -53,6 +67,17 @@ nothing once it has finished.
 ## Quick start
 
 Requirements: Node.js 20+ and Python 3.11+. FFmpeg is optional (needed only for M4A uploads).
+
+Optional experimental transcription (free, roughly 1 GB including PyTorch; the Demucs model
+downloads on first use):
+
+```bash
+pip install -r requirements-transcribe.txt
+```
+
+```bash
+pip install --no-deps basic-pitch==0.4.0
+```
 
 ```bash
 cd backend
@@ -104,6 +129,7 @@ Interactive docs at `http://localhost:8000/docs` while the backend runs.
 | GET | `/api/analyses/{id}` | `processing / completed / failed`, plus the result and `audio_url` when done |
 | GET | `/api/analyses/{id}/audio` | The MP3 |
 | DELETE | `/api/analyses/{id}` | Forget the job and delete its files |
+| POST / GET / DELETE | `/api/transcriptions[/{id}]` | Experimental note transcription (501 if not installed). Returns notes only; the app places them on the fretboard |
 
 Job ids are random UUIDs, so only the app that created a job can fetch it. If the server is
 reachable from the internet, set `API_KEY` on the server and the same `EXPO_PUBLIC_API_KEY`

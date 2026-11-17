@@ -80,8 +80,24 @@ async function send(path: string, init: RequestInit = {}): Promise<Response> {
   return res;
 }
 
+export interface TranscriptionJob {
+  id: string;
+  status: JobStatus;
+  error: string | null;
+  result: { notes: { start: number; end: number; midi: number; velocity: number }[]; source: string; model_version: string; processing_seconds: number } | null;
+}
+
 export const api = {
-  health: async () => (await send('/api/health')).json() as Promise<{ status: string; engine: string }>,
+  health: async () =>
+    (await send('/api/health')).json() as Promise<{ status: string; engine: string; transcription_available?: boolean }>,
+  getTranscription: async (id: string) => (await send(`/api/transcriptions/${id}`)).json() as Promise<TranscriptionJob>,
+  forgetTranscription: async (id: string) => {
+    try {
+      await send(`/api/transcriptions/${id}`, { method: 'DELETE' });
+    } catch {
+      /* expires on its own */
+    }
+  },
   getJob: async (id: string) => (await send(`/api/analyses/${id}`)).json() as Promise<Job>,
   /** Download the MP3 the server produced. */
   downloadAudio: async (url: string) => (await send(url)).arrayBuffer(),
@@ -106,13 +122,26 @@ export function uploadForAnalysis(
   title: string,
   onProgress: (fraction: number) => void,
 ): { promise: Promise<Job>; abort: () => void } {
+  return uploadTo<Job>('/api/analyses', source, { title }, onProgress);
+}
+
+export function uploadForTranscription(source: UploadSource, onProgress: (fraction: number) => void) {
+  return uploadTo<TranscriptionJob>('/api/transcriptions', source, {}, onProgress);
+}
+
+function uploadTo<T>(
+  path: string,
+  source: UploadSource,
+  fields: Record<string, string>,
+  onProgress: (fraction: number) => void,
+): { promise: Promise<T>; abort: () => void } {
   const xhr = new XMLHttpRequest();
-  const promise = new Promise<Job>((resolve, reject) => {
+  const promise = new Promise<T>((resolve, reject) => {
     const form = new FormData();
     if (source.kind === 'web') form.append('file', source.file, source.name);
     else form.append('file', { uri: source.uri, name: source.name, type: source.mimeType } as unknown as Blob);
-    form.append('title', title);
-    xhr.open('POST', `${config.apiUrl}/api/analyses`);
+    for (const [k, v] of Object.entries(fields)) form.append(k, v);
+    xhr.open('POST', `${config.apiUrl}${path}`);
     for (const [k, v] of Object.entries(authHeaders())) xhr.setRequestHeader(k, v);
     xhr.upload.onprogress = (e) => e.lengthComputable && onProgress(e.loaded / e.total);
     xhr.onload = () => {
@@ -122,7 +151,7 @@ export function uploadForAnalysis(
       } catch {
         /* handled below */
       }
-      if (xhr.status >= 200 && xhr.status < 300) resolve(body as Job);
+      if (xhr.status >= 200 && xhr.status < 300) resolve(body as T);
       else reject(new ApiError(xhr.status, (body as { detail?: string } | null)?.detail ?? `Upload failed (${xhr.status})`));
     };
     xhr.onerror = () => reject(unreachable());

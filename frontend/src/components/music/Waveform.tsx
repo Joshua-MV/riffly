@@ -1,5 +1,5 @@
 import { memo, useState } from 'react';
-import { Pressable, View, type LayoutChangeEvent } from 'react-native';
+import { Pressable, useWindowDimensions, View, type LayoutChangeEvent } from 'react-native';
 import Svg, { Rect } from 'react-native-svg';
 
 import { useTheme } from '@/theme/ThemeProvider';
@@ -36,7 +36,9 @@ const Bars = memo(function Bars({ peaks, width, height, color }: { peaks: readon
 /** Seekable waveform. Played portion is tinted by clipping a second copy of the bars. */
 export function Waveform({ peaks, duration, currentTime, loop, markers = [], onSeek, height = 72 }: WaveformProps) {
   const { colors } = useTheme();
-  const [width, setWidth] = useState(0);
+  const window = useWindowDimensions();
+  // Window-based first guess so the waveform draws before (or without) a layout event.
+  const [width, setWidth] = useState(() => Math.max(200, Math.min(window.width, 1200) / 2 - 64));
   const x = (t: number) => (duration > 0 ? (t / duration) * width : 0);
   const playedWidth = Math.min(width, x(currentTime));
 

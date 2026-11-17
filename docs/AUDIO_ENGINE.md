@@ -56,6 +56,30 @@ reference annotations in MIREX `.lab` format, and run the evaluation.
   offset is estimated and compensated within ±50 cents.
 - Modulations are not tracked: the whole song gets a single key.
 
+## Experimental transcription (`app/audio/transcribe.py`)
+
+1. **Demucs `htdemucs_6s`** (MIT) splits the mix into drums, bass, vocals, piano, guitar and
+   other. The guitar stem is used, or "other" if the guitar stem is silent.
+2. **Basic Pitch** (Spotify, Apache-2.0) detects notes, limited to the guitar range (75–1400 Hz).
+   It runs its bundled ONNX model on onnxruntime, because the TensorFlow build it asks for has
+   no Python 3.12 Windows wheels.
+3. The app places each note on a string and fret (`src/lib/music/placement.ts`). It uses a
+   greedy hand-position model, is capo-aware, puts simultaneous notes on separate strings, and
+   prefers open strings and frets 0–12. It then quantises the notes onto the same 8th-note grid
+   as the fingerpicking tab.
+
+Measured on this development machine (CPU only):
+
+| Test | Result |
+|---|---|
+| Clean synthesized melody, no separation | All pitches found (`test_real_models_transcribe_a_melody`) |
+| Synthesized strummed G–D–Em–C mix with drums, 20 s | 48 notes from the guitar stem; every detected pitch class was a chord tone. 72 s including the first model load |
+| Ab–Eb–Fm–Db mix through the app, 27 s | 142 notes in 17 s once warm; first notes Ab2, C4, Eb4, Ab3 |
+
+Real band recordings will be much harder (stem bleed, distortion, doubled parts), so the UI
+labels the result as an experimental sketch. The generated fingerpicking tab is the reliable
+default.
+
 ## Pretrained models: licence review
 
 | Model | Licence | Decision |
@@ -64,7 +88,8 @@ reference annotations in MIREX `.lab` format, and run the evaluation.
 | BTC (ISMIR 2019) | Code MIT; training data copyrighted | Needs legal review |
 | Chordino / NNLS | GPL-2 | Would force the backend under GPL |
 | Essentia models | AGPL-3 | Not suitable |
-| **Demucs** (source separation) | **MIT** | Planned as an optional stage before chroma |
+| **Demucs** (source separation) | **MIT** | Used for experimental transcription; could also feed chord detection later |
+| **Basic Pitch** (note transcription) | **Apache-2.0** | Used for experimental transcription (ONNX) |
 
 A trained model plugs in by implementing `ChordRecognizer` in `chords.py`. The API and the
 app do not change.

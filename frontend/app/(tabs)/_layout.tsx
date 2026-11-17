@@ -1,4 +1,7 @@
 import { Tabs } from 'expo-router';
+import { View } from 'react-native';
+
+import { MiniPlayer } from '@/features/player/MiniPlayer';
 
 import { BottomTabBar, NAV_ITEMS, Sidebar } from '@/components/layout/Navigation';
 import { useTheme } from '@/theme/ThemeProvider';
@@ -26,9 +29,12 @@ export default function TabsLayout() {
           if (route) navigateToTab(route.key);
         };
         return isDesktop ? (
-          <Sidebar activeName={activeName} onNavigate={onNavigate} />
+          <Sidebar activeName={activeName} onNavigate={onNavigate} footer={<MiniPlayer variant="sidebar" />} />
         ) : (
-          <BottomTabBar activeName={activeName} onNavigate={onNavigate} />
+          <View>
+            <MiniPlayer />
+            <BottomTabBar activeName={activeName} onNavigate={onNavigate} />
+          </View>
         );
       }}
     >

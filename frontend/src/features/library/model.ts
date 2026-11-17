@@ -4,6 +4,7 @@
  * (IndexedDB) and native (file system) storage backends.
  */
 
+import type { MidiNote } from '@/lib/music/placement';
 import type { AnalysisResult } from '@/services/api';
 
 export interface ChordCorrection {
@@ -12,6 +13,19 @@ export interface ChordCorrection {
   originalLabel: string;
   correctedLabel: string;
 }
+
+/** Per-song practice settings, remembered between sessions. */
+export interface PracticeSettings {
+  /** Capo fret; chord shapes are shown relative to it. */
+  capo: number;
+  /** Change of key in semitones (the recording does not change; for playing without it). */
+  keyShift: number;
+  /** Fingerpicking pattern id. */
+  pattern: string;
+  countIn: boolean;
+}
+
+export const DEFAULT_PRACTICE: PracticeSettings = { capo: 0, keyShift: 0, pattern: 'arpeggio', countIn: false };
 
 export interface LocalSong {
   /** Format version, so stored records can be migrated later. */
@@ -28,9 +42,23 @@ export interface LocalSong {
   notes: string | null;
   analysis: AnalysisResult;
   corrections: ChordCorrection[];
+  practice?: PracticeSettings;
+  /** Experimental note transcription, if the user requested one. */
+  transcription?: TranscriptionResult;
 }
 
-export type SongPatch = Partial<Pick<LocalSong, 'title' | 'artist' | 'notes' | 'isFavourite'>>;
+/** Experimental transcription: detected notes (sounding pitch). Fret placement happens in the app. */
+export interface TranscriptionResult {
+  notes: MidiNote[];
+  source: string;
+  model_version: string;
+  processing_seconds: number;
+  created_at: string;
+}
+
+export type SongPatch = Partial<Pick<LocalSong, 'title' | 'artist' | 'notes' | 'isFavourite' | 'practice' | 'transcription'>>;
+
+export const practiceOf = (song: LocalSong): PracticeSettings => ({ ...DEFAULT_PRACTICE, ...song.practice });
 
 export function newSongId(): string {
   const rand = Math.random().toString(36).slice(2, 10);
