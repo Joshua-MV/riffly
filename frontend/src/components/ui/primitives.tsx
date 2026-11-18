@@ -2,7 +2,7 @@ import type { PressState } from '@/components/ui/pressState';
 import { Icon } from '@/components/ui/Icon';
 import { isValidElement, type ReactNode } from 'react';
 import {
-  Pressable, ScrollView, StyleSheet, TextInput, View, type StyleProp, type ViewStyle,
+  Animated, Pressable, ScrollView, StyleSheet, TextInput, View, type StyleProp, type ViewStyle,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -11,6 +11,7 @@ import { useLayout } from '@/theme/useLayout';
 import { radius, shadow, spacing, typeScale } from '@/theme/tokens';
 
 import type { IconName } from './Button';
+import { usePageEntrance } from './FadeIn';
 import { Text } from './Text';
 
 /** Scrollable page container with a readable max width on large screens. */
@@ -18,15 +19,17 @@ export function Screen({ children, maxWidth = 1280, scroll = true }: { children:
   const { colors } = useTheme();
   const { isPhone } = useLayout();
   const insets = useSafeAreaInsets();
+  const entrance = usePageEntrance();
   const inner = (
-    <View
+    <Animated.View
       style={[
         styles.screenInner,
         { maxWidth, paddingHorizontal: isPhone ? spacing.lg : spacing.xxl, paddingTop: Math.max(insets.top, spacing.lg) + (isPhone ? spacing.sm : spacing.md) },
+        entrance,
       ]}
     >
       {children}
-    </View>
+    </Animated.View>
   );
   return scroll ? (
     <ScrollView style={{ backgroundColor: colors.background }} contentContainerStyle={{ paddingBottom: spacing.xxxl }}>
@@ -63,8 +66,8 @@ export function Card({
       onPress={onPress}
       style={({ pressed, hovered }: PressState) => [
         base,
-        hovered && { borderColor: colors.borderStrong, backgroundColor: colors.surfaceHover },
-        pressed && { opacity: 0.9 },
+        hovered && { borderColor: colors.borderStrong, backgroundColor: colors.surfaceHover, transform: [{ translateY: -2 }] },
+        pressed && { opacity: 0.9, transform: [{ scale: 0.99 }] },
       ]}
     >
       {children}

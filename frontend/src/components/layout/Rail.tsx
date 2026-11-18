@@ -1,6 +1,6 @@
 import { router, useGlobalSearchParams, usePathname } from 'expo-router';
-import { useMemo, type ReactNode } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { Animated, Pressable, StyleSheet, View, type LayoutChangeEvent } from 'react-native';
 
 import { ArtTile, keyShort } from '@/components/music/ArtTile';
 import { Icon, type IconName } from '@/components/ui/Icon';
@@ -8,21 +8,22 @@ import type { PressState } from '@/components/ui/pressState';
 import { Text } from '@/components/ui/Text';
 import { practiceOf, type LocalSong } from '@/features/library/model';
 import { usePlayer } from '@/features/player/PlayerProvider';
+import { useSettings } from '@/features/settings/store';
 import { useSongs } from '@/features/songs/hooks';
 import { useTheme } from '@/theme/ThemeProvider';
 import { radius, spacing } from '@/theme/tokens';
 
-import { Logo } from './Logo';
+import { Logo, LogoMark } from './Logo';
 
-export type SongView = 'overview' | 'play' | 'lyrics' | 'strum' | 'tab';
-export type Destination = 'tuner' | 'songs' | 'song' | 'play' | 'lyrics' | 'strum' | 'tab' | 'learn' | 'settings';
+export type SongView = 'overview' | 'play' | 'strum' | 'tab';
+export type Destination = 'tuner' | 'songs' | 'song' | 'play' | 'strum' | 'tab' | 'learn' | 'settings';
 
 /** Where the app is now, from the route. */
 export function useDestination(): Destination {
   const path = usePathname();
   const { view } = useGlobalSearchParams<{ view?: string }>();
   if (path === '/' || path === '/index') return 'tuner';
-  if (path.startsWith('/song/')) return (['play', 'lyrics', 'strum', 'tab'].includes(view ?? '') ? view : 'song') as Destination;
+  if (path.startsWith('/song/')) return (['play', 'strum', 'tab'].includes(view ?? '') ? view : 'song') as Destination;
   if (path.startsWith('/chord')) return 'learn';
   if (path === '/profile') return 'settings';
   return 'songs';
@@ -66,10 +67,41 @@ export function Rail({ compact = false }: { compact?: boolean }) {
   const songs = useSongs();
   const count = songs.data?.length ?? 0;
   const p = song ? practiceOf(song) : null;
+  const { reduceMotion } = useSettings();
+
+  // The highlight glides from item to item: one panel behind the list, springing to wherever
+  // the active item is.
+  const layouts = useRef<Partial<Record<Destination, { y: number; h: number }>>>({});
+  const glideY = useRef(new Animated.Value(0)).current;
+  const glideH = useRef(new Animated.Value(0)).current;
+  const shown = useRef(false);
+  const [, setMeasured] = useState(0);
+  useEffect(() => {
+    const l = layouts.current[here];
+    if (!l) return;
+    if (!shown.current || reduceMotion) {
+      glideY.setValue(l.y);
+      glideH.setValue(l.h);
+      shown.current = true;
+      return;
+    }
+    Animated.parallel([
+      Animated.spring(glideY, { toValue: l.y, friction: 9, tension: 120, useNativeDriver: false }),
+      Animated.spring(glideH, { toValue: l.h, friction: 9, tension: 120, useNativeDriver: false }),
+    ]).start();
+  });
+  const measure = (d: Destination) => (e: LayoutChangeEvent) => {
+    const { y, height } = e.nativeEvent.layout;
+    const prev = layouts.current[d];
+    if (prev && prev.y === y && prev.h === height) return;
+    layouts.current[d] = { y, h: height };
+    if (d === here) setMeasured((n) => n + 1);
+  };
+  const glides = here !== 'settings' && !!layouts.current[here];
 
   const item = (d: Destination, label: string, icon: IconName, key?: string, extra?: ReactNode) => {
     const active = here === d;
-    const disabled = ['play', 'lyrics', 'strum', 'tab'].includes(d) && !song;
+    const disabled = ['play', 'strum', 'tab'].includes(d) && !song;
     return (
       <Pressable
         key={d}
@@ -78,10 +110,11 @@ export function Rail({ compact = false }: { compact?: boolean }) {
         accessibilityState={{ selected: active, disabled }}
         disabled={disabled}
         onPress={() => goTo(d, song)}
+        onLayout={measure(d)}
         style={({ hovered }: PressState) => [
           styles.item,
           compact && styles.itemCompact,
-          active && { backgroundColor: colors.surfaceHover },
+          active && d === 'settings' && { backgroundColor: colors.surfaceHover },
           hovered && !active && { backgroundColor: colors.surface },
           disabled && { opacity: 0.4 },
         ]}
@@ -91,7 +124,7 @@ export function Rail({ compact = false }: { compact?: boolean }) {
           <>
             <Text variant="body" style={{ flex: 1, color: active ? colors.text : colors.textMuted }}>{label}</Text>
             {extra}
-            {active ? <View style={[styles.lamp, { backgroundColor: colors.accent }]} /> : key ? <Text variant="mono" tone="subtle" style={styles.key}>{key}</Text> : null}
+            {active ? <View style={[styles.lamp, { backgroundColor: colors.accent }]} /> : null}
           </>
         )}
       </Pressable>
@@ -102,9 +135,15 @@ export function Rail({ compact = false }: { compact?: boolean }) {
   return (
     <View style={[styles.rail, compact && { width: 64, paddingHorizontal: spacing.sm }, { backgroundColor: colors.backgroundRaised, borderRightColor: colors.border }]}>
       <View style={[styles.logo, compact && { paddingHorizontal: 0, alignItems: 'center' }]}>
-        <Logo size={compact ? 20 : 26} />
+        {compact ? <LogoMark size={30} /> : <Logo size={24} />}
       </View>
       <View role="tablist" style={{ gap: 2 }}>
+        {glides && (
+          <Animated.View
+            pointerEvents="none"
+            style={[styles.glide, { top: glideY, height: glideH, backgroundColor: here === 'song' ? 'transparent' : colors.surfaceHover }]}
+          />
+        )}
         {section('Instrument')}
         {item('tuner', 'Tuner', 'speedometer-outline', '1')}
         {section('Songs')}
@@ -116,6 +155,7 @@ export function Rail({ compact = false }: { compact?: boolean }) {
             accessibilityLabel={`${song.title}: song overview`}
             accessibilityState={{ selected: here === 'song' }}
             onPress={() => goTo('song', song)}
+            onLayout={measure('song')}
             style={({ hovered }: PressState) => [
               styles.songCard,
               { backgroundColor: here === 'song' ? colors.surfaceHover : colors.surface, borderColor: here === 'song' ? colors.borderStrong : colors.border },
@@ -137,11 +177,10 @@ export function Rail({ compact = false }: { compact?: boolean }) {
           </Pressable>
         )}
         {item('play', 'Play Along', 'play-circle-outline', '3')}
-        {item('lyrics', 'Lyrics', 'reorder-three-outline', '4')}
-        {item('strum', 'Strum', 'swap-vertical', '5')}
-        {item('tab', 'Tab', 'list-outline', '6')}
+        {item('strum', 'Strum', 'swap-vertical', '4')}
+        {item('tab', 'Tab', 'list-outline', '5')}
         {section('Learn')}
-        {item('learn', 'Chords & drills', 'book-outline', '7')}
+        {item('learn', 'Chords & drills', 'book-outline', '6')}
       </View>
       <View style={{ flex: 1 }} />
       {item('settings', 'Settings', 'options-outline', 'Ctrl ,')}
@@ -164,6 +203,7 @@ const styles = StyleSheet.create({
   itemCompact: { justifyContent: 'center', paddingHorizontal: 0 },
   key: { fontSize: 10.5 },
   lamp: { width: 6, height: 6, borderRadius: 3 },
+  glide: { position: 'absolute', left: 0, right: 0, borderRadius: radius.md },
   songCard: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, padding: spacing.sm, borderRadius: radius.md, borderWidth: 1, marginBottom: spacing.xs },
   footer: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingHorizontal: spacing.sm, paddingTop: spacing.md },
   dot: { width: 6, height: 6, borderRadius: 3 },

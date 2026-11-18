@@ -188,7 +188,7 @@ int main(int argc, char** argv) {
       CHECK(s.find("\"bpm\":1") != std::string::npos, "bpm field: %.80s", s.c_str());
       for (const char* label : {"\"label\":\"C\"", "\"label\":\"G\"", "\"label\":\"Am\"", "\"label\":\"F\""})
         CHECK(s.find(label) != std::string::npos, "missing %s", label);
-      CHECK(s.find("\"model_version\":\"riffly-cpp-0.2.0+beat-sync\"") != std::string::npos, "model version");
+      CHECK(s.find("\"model_version\":\"riffly-cpp-0.5.0+beat-sync\"") != std::string::npos, "model version");
     }
     riffly_free(json);
     riffly_free(err);

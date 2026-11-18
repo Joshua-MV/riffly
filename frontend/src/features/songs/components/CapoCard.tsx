@@ -1,4 +1,5 @@
 import { router } from 'expo-router';
+import { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 
 import { Button, IconButton } from '@/components/ui/Button';
@@ -32,20 +33,22 @@ function tuningHelp(t: Tuning, standardShapes: boolean): string {
 export function CapoCard({ capo, keyShift, tuning, standardShapes, options, recommended, onCapo, onKeyShift, onTuning }: CapoCardProps) {
   const { colors } = useTheme();
   const current = options.find((o) => o.capo === capo);
+  // Beginner version first: tuning and key change are tucked away unless already in use.
+  const [more, setMore] = useState(tuning.id !== 'standard' || keyShift !== 0);
   const easyPct = current ? Math.round(current.easyShare * 100) : 0;
 
   return (
     <Card style={{ gap: spacing.md }}>
       <View style={styles.head}>
         <View style={{ flex: 1 }}>
-          <Text variant="subheading">Make it easier</Text>
+          <Text variant="subheading">Beginner chords</Text>
           <Text variant="caption" tone="muted">
-            A capo raises every string, so easy open shapes sound in the song's real key, and you can still play along with the recording.
+            Riffly picks the capo that turns this song into easy open chords, so you can play along with the recording.
           </Text>
         </View>
       </View>
 
-      <View style={{ gap: spacing.xs }}>
+      {more && <View style={{ gap: spacing.xs }}>
         <View style={styles.row}>
           <Text variant="overline" tone="subtle" style={{ width: 52 }}>Tuning</Text>
           {GUITAR_TUNINGS.map((t) => (
@@ -58,7 +61,7 @@ export function CapoCard({ capo, keyShift, tuning, standardShapes, options, reco
             <Button label="Tune to this" icon="musical-note" size="sm" variant="secondary" onPress={() => router.push({ pathname: '/', params: { tuning: tuning.id } })} />
           )}
         </View>
-      </View>
+      </View>}
 
       {!standardShapes && (
         <Text variant="caption" tone="muted" style={[styles.divider, { borderTopColor: colors.border }]}>
@@ -95,12 +98,13 @@ export function CapoCard({ capo, keyShift, tuning, standardShapes, options, reco
         </View>
       )}
 
-      <View style={[styles.row, styles.divider, { borderTopColor: colors.border }]}>
+      <Button label={more ? 'Fewer options' : 'More options: tuning, change key'} variant="ghost" size="sm" onPress={() => setMore((v) => !v)} style={{ alignSelf: 'flex-start' }} />
+      {more && <View style={[styles.row, styles.divider, { borderTopColor: colors.border }]}>
         <Text variant="overline" tone="subtle" style={{ width: 52 }}>Key</Text>
         <IconButton icon="remove" label="Lower key a semitone" size={32} onPress={() => onKeyShift(Math.max(-6, keyShift - 1))} />
         <Text variant="bodyStrong" style={{ minWidth: 72, textAlign: 'center' }}>{keyShift === 0 ? 'Original' : `${keyShift > 0 ? '+' : ''}${keyShift}`}</Text>
         <IconButton icon="add" label="Raise key a semitone" size={32} onPress={() => onKeyShift(Math.min(6, keyShift + 1))} />
-      </View>
+      </View>}
       {keyShift !== 0 && (
         <Text variant="caption" tone="highlight">
           Changing the key moves the chords away from the recording. Use it to sing in your range without the track; use the capo to play along with it.

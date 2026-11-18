@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 112 112">
+  <defs><clipPath id="lamp"><circle cx="56" cy="56" r="27"/></clipPath></defs>
+  <rect width="112" height="112" rx="26" fill="#252622"/>
+  <circle cx="56" cy="56" r="32.5" fill="none" stroke="#F2EEE4" stroke-opacity="0.16" stroke-width="1.5"/>
+  <circle cx="56" cy="56" r="27" fill="#C58A45"/>
+  <path d="M14 56 H29 C32.5 56 34 46.5 38.5 46.5 S 45.5 66.5 50 66.5 S 57.5 44.5 62 44.5 S 69 63.5 73.5 63.5 S 80 56 83 56 H98" fill="none" stroke="#F2EEE4" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+  <path clip-path="url(#lamp)" d="M14 56 H29 C32.5 56 34 46.5 38.5 46.5 S 45.5 66.5 50 66.5 S 57.5 44.5 62 44.5 S 69 63.5 73.5 63.5 S 80 56 83 56 H98" fill="none" stroke="#1E1F1B" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

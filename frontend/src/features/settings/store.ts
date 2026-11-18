@@ -18,6 +18,11 @@ export interface Settings {
   defaultSpeed: number;
   /** Tone the motion down to colour changes. */
   reduceMotion: boolean;
+  /**
+   * How far (ms) the beat lamp, strum highlight and metronome sit behind the player's raw
+   * position, so they land on what you actually hear (sound reaches the speakers a little late).
+   */
+  syncDelayMs: number;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -27,6 +32,7 @@ export const DEFAULT_SETTINGS: Settings = {
   accentFirstBeat: true,
   defaultSpeed: 1,
   reduceMotion: false,
+  syncDelayMs: 120,
 };
 
 const KEY = 'riffly.settings';

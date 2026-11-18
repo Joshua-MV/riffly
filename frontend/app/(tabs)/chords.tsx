@@ -1,4 +1,5 @@
 import { router } from 'expo-router';
+import { Stagger } from '@/components/ui/FadeIn';
 import { useMemo, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 
@@ -68,11 +69,11 @@ export default function ChordLibraryScreen() {
         <EmptyState icon="search" title="No chords match" body="Try a root note like “A”, a full name like “Bbmaj7”, or a type like “dim”." />
       ) : (
         <View style={styles.grid} onLayout={(e) => setGridWidth(e.nativeEvent.layout.width)}>
-          {cardWidth > 0 && results.map((c) => {
+          {cardWidth > 0 && results.map((c, i) => {
             const v = c.voicings[0];
             return (
+              <Stagger key={c.id} index={i}>
               <Card
-                key={c.id}
                 onPress={() => router.push(`/chord/${c.id}`)}
                 accessibilityLabel={`${c.name}, ${QUALITIES[c.chord.quality].label}, ${c.voicings.length} voicings`}
                 style={[styles.card, { width: cardWidth }]}
@@ -86,6 +87,7 @@ export default function ChordLibraryScreen() {
                 </View>
                 <Text variant="caption" tone="muted">{v.difficulty === 'beginner' ? 'Beginner · open' : v.barre ? `Barre · fret ${v.barre.fret}` : v.shape}</Text>
               </Card>
+              </Stagger>
             );
           })}
         </View>

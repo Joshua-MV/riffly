@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="-28 -28 168 168">
+  <defs>
+    <mask id="cut"><rect x="-28" y="-28" width="168" height="168" fill="white"/><path d="M14 56 H29 C32.5 56 34 46.5 38.5 46.5 S 45.5 66.5 50 66.5 S 57.5 44.5 62 44.5 S 69 63.5 73.5 63.5 S 80 56 83 56 H98" fill="none" stroke="black" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"/></mask>
+    <clipPath id="outside"><path d="M-28 -28 H140 V140 H-28 Z M56 29 A27 27 0 1 0 56.01 29 Z" clip-rule="evenodd"/></clipPath>
+  </defs>
+  <circle cx="56" cy="56" r="27" fill="#000" mask="url(#cut)"/>
+  <path clip-path="url(#outside)" d="M14 56 H29 C32.5 56 34 46.5 38.5 46.5 S 45.5 66.5 50 66.5 S 57.5 44.5 62 44.5 S 69 63.5 73.5 63.5 S 80 56 83 56 H98" fill="none" stroke="#000" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

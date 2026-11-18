@@ -149,20 +149,3 @@ mod tests {
     }
 }
 
-unsafe extern "C" {
-    fn riffly_decode_mono(data: *const u8, size: usize, target_rate: c_int, samples_out: *mut *mut f32, frames_out: *mut usize, error_out: *mut *mut c_char) -> c_int;
-}
-
-/// Decode MP3/WAV bytes to mono samples at `rate` Hz (the engine's windowed-sinc resampler).
-pub fn decode_mono(bytes: &[u8], rate: u32) -> Result<Vec<f32>, String> {
-    let mut samples: *mut f32 = ptr::null_mut();
-    let mut frames = 0usize;
-    let mut err: *mut c_char = ptr::null_mut();
-    let rc = unsafe { riffly_decode_mono(bytes.as_ptr(), bytes.len(), rate as c_int, &mut samples, &mut frames, &mut err) };
-    if rc != 0 {
-        return Err(unsafe { take_string(err) });
-    }
-    let out = unsafe { std::slice::from_raw_parts(samples, frames) }.to_vec();
-    unsafe { riffly_free(samples.cast()) };
-    Ok(out)
-}

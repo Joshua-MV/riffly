@@ -136,13 +136,17 @@ export function buildFingerstyleTab(
   detectedBeats: readonly number[],
   pattern: PickPattern,
   openMidi?: readonly number[],
+  /** Beat (0-3) of the extended grid that starts bar 1; worked out from the chords if omitted. */
+  barOffset?: number,
 ): TabBar[] {
   if (detectedBeats.length < 5 || !shapes.length) return [];
   const beats = extendBeats(detectedBeats);
-  const offset = chooseBarOffset(
-    beats,
-    shapes.filter((s) => s.shape !== 'N').map((s) => s.start),
-  );
+  const offset =
+    barOffset ??
+    chooseBarOffset(
+      beats,
+      shapes.filter((s) => s.shape !== 'N').map((s) => s.start),
+    );
   const voicingCache = new Map<string, Record<Voice, number> & { frets: Frets }>();
   const resolve = (shape: string) => {
     if (!voicingCache.has(shape)) {

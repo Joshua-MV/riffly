@@ -4,7 +4,7 @@ import { parseChord } from '@/lib/music/chords';
 import { getVoicings } from '@/lib/music/voicings';
 import type { AnalysisResult } from '@/services/api';
 
-import { beatInBar, playContext, practiceTab, practiceTimeline, songChords, topChanges } from '../practice';
+import { beatInBar, beginnerTimeline, playContext, practiceTab, practiceTimeline, simpleChord, songChords, topChanges } from '../practice';
 
 const chords = ['Ab', 'Eb', 'Fm', 'Db', 'Ab', 'Eb', 'Fm', 'Db'].map((label, i) => ({
   start: 0.5 + i * 2, end: 0.5 + (i + 1) * 2, label, root: null, quality: null, confidence: 0.8,
@@ -86,5 +86,15 @@ describe('practice view', () => {
     const firstBar = bars[0].steps.flatMap((s) => s.notes);
     expect(firstBar.every((n) => n.fret === 0)).toBe(true);
     expect(GUITAR_TUNINGS.length).toBeGreaterThan(5);
+  });
+
+  it('gives the beginner version of each chord', () => {
+    expect(['Cadd9', 'G/B', 'Dsus4', 'Em7', 'E5', 'Bbm', 'F#7', 'N'].map(simpleChord)).toEqual(['C', 'G', 'D', 'Em', 'E', 'Bbm', 'F#', 'N']);
+  });
+
+  it('joins neighbouring blocks that become the same beginner chord, keeping corrections', () => {
+    const seg = (start: number, end: number, label: string) => ({ start, end, label, root: null, quality: null, confidence: 0.8 });
+    const t = beginnerTimeline([seg(0, 1, 'Gadd9'), seg(1, 2, 'G/B'), seg(2, 3, 'Em7'), seg(3, 4, 'Dsus4')], [{ start: 3, originalLabel: 'Dsus4', correctedLabel: 'Dsus4' }], 0);
+    expect(t.map((c) => [c.display, c.start, c.end])).toEqual([['G', 0, 2], ['Em', 2, 3], ['Dsus4', 3, 4]]);
   });
 });

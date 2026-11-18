@@ -77,7 +77,7 @@ export function useExportMp3() {
 }
 
 /** Songs analysed by an older engine are re-analysed on this PC to get the improved chords. */
-export const CURRENT_ENGINE = 'riffly-cpp-0.2';
+export const CURRENT_ENGINE = 'riffly-cpp-0.4';
 export const needsReanalysis = (song: LocalSong) => localEngine.available() && !song.analysis.model_version.startsWith(CURRENT_ENGINE);
 
 /** Re-run chord/tempo/strum analysis on the saved MP3; corrections and settings are kept. */

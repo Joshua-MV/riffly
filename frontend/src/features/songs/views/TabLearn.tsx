@@ -7,6 +7,7 @@ import { TabView } from '@/components/music/TabView';
 import { Button } from '@/components/ui/Button';
 import { Card, Chip } from '@/components/ui/primitives';
 import type { PressState } from '@/components/ui/pressState';
+import { Stagger } from '@/components/ui/FadeIn';
 import { Text } from '@/components/ui/Text';
 import { ChangeDrill } from '@/features/practice/ChangeDrill';
 import { playVoicing } from '@/lib/audio/chordPlayer';
@@ -72,17 +73,17 @@ export function TabLearn({ s }: { s: SongPractice }) {
             </View>
           </View>
           <View style={styles.grid}>
-            {cards.map((c) => {
+            {cards.map((c, i) => {
               const now = c.shape === nowShape;
               return (
+                <Stagger key={c.shape} index={i}>
                 <Pressable
-                  key={c.shape}
                   role="button"
                   accessibilityLabel={`${c.shape}: hear it`}
                   onPress={() => c.v && void playVoicing(c.v.frets, ctx.soundMidi)}
                   style={({ hovered }: PressState) => [
                     styles.chordCard,
-                    { borderColor: now ? colors.accent : colors.border, backgroundColor: now ? colors.accentSoft : hovered ? colors.surfaceHover : colors.surface },
+                    { borderColor: now ? colors.accent : colors.border, backgroundColor: now ? colors.accentSoft : hovered ? colors.surfaceHover : colors.surface, transform: [{ translateY: hovered ? -2 : 0 }] },
                   ]}
                 >
                   <View style={styles.chordHead}>
@@ -99,6 +100,7 @@ export function TabLearn({ s }: { s: SongPractice }) {
                     )}
                   </View>
                 </Pressable>
+                </Stagger>
               );
             })}
           </View>

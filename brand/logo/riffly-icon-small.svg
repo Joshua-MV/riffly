@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 24 24">
+  <defs><clipPath id="lamp"><circle cx="12" cy="12" r="6.6"/></clipPath></defs>
+  <rect width="24" height="24" rx="5" fill="#252622"/>
+  <circle cx="12" cy="12" r="6.6" fill="#C58A45"/>
+  <path d="M2.5 12 H5.5 C7.3 12 8 8 10 8 S 12.6 16 14.4 16 S 16.8 12 18.5 12 H21.5" fill="none" stroke="#F2EEE4" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/>
+  <path clip-path="url(#lamp)" d="M2.5 12 H5.5 C7.3 12 8 8 10 8 S 12.6 16 14.4 16 S 16.8 12 18.5 12 H21.5" fill="none" stroke="#1E1F1B" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

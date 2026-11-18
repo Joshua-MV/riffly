@@ -1,8 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
 import {
-  Activity, AlignLeft, ArrowDown, ArrowLeft, ArrowUp, ArrowUpDown, AudioLines, BookOpen, CirclePlay, Check, ChevronDown, ChevronLeft, ChevronRight, CircleAlert, CircleArrowDown,
+  Activity, AlignLeft, ArrowDown, ArrowLeft, ArrowUp, ArrowUpDown, AudioLines, BookOpen, CirclePlay, Check, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, CircleAlert, CircleArrowDown,
   CircleCheck, CircleHelp, CircleUser, CircleX, Download, Ear, Ellipsis, FileText, FolderOpen, Gauge, Guitar, Hand, HardDrive,
-  Heart, House, Info, Keyboard, LayoutGrid, Library, ListMusic, Maximize2, Metronome, Mic, Minimize2, Minus, Music, Music2, Pause,
+  Heart, House, Info, Keyboard, LayoutGrid, Library, ListMusic, Lock, Maximize2, Metronome, Mic, Minimize2, Minus, Music, Music2, Pause,
   Play, Plus, RefreshCw, Repeat, RotateCcw, RotateCw, Search, Settings, SkipBack, SkipForward, SlidersHorizontal, Sparkles, Square,
   SquareCheck, SquarePen, Timer, Trash2, TriangleAlert, Type, Upload, Volume2, X, type LucideIcon,
 } from 'lucide-react-native';
@@ -78,6 +78,8 @@ const MAP: Partial<Record<IconName, [LucideIcon, boolean?]>> = {
   'chevron-forward': [ChevronRight],
   'chevron-back': [ChevronLeft],
   'chevron-down': [ChevronDown],
+  'chevron-up': [ChevronUp],
+  'lock-closed-outline': [Lock],
   mic: [Mic],
   'mic-outline': [Mic],
   settings: [Settings],

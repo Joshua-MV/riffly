@@ -1,15 +1,15 @@
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { practiceOf, type LocalSong, type PracticeSettings } from '@/features/library/model';
 import { usePlayer } from '@/features/player/PlayerProvider';
 import { transposeLabel } from '@/lib/music/chords';
-import { chooseBarOffset, extendBeats, PATTERNS, stepAt } from '@/lib/music/fingerstyle';
+import { extendBeats, PATTERNS, stepAt } from '@/lib/music/fingerstyle';
 import { capoOptions, recommendCapo } from '@/lib/music/simplify';
 import { resolveStrum } from '@/lib/music/strum';
 
 import { needsReanalysis, useReanalyse, useUpdateSong } from './hooks';
-import { beatInBar, playContext, practiceTab, practiceTimeline } from './practice';
-import { buildTimeline, segmentAt, upcoming } from './timeline';
+import { beatInBar, beginnerTimeline, playContext, practiceTab, practiceTimeline, songBarOffset } from './practice';
+import { segmentAt, upcoming } from './timeline';
 
 /**
  * Everything the song's views share: the shared player bound to this song, the chord timeline
@@ -49,18 +49,37 @@ export function useSongPractice(song: LocalSong) {
   const ctx = useMemo(() => playContext(practice), [practice]);
   const timeline = useMemo(() => practiceTimeline(song, practice), [song, practice]);
   const openOffset = ctx.displayOffset + practice.capo;
-  const sounding = useMemo(() => (ctx.standardShapes ? buildTimeline(result.chords, song.corrections, openOffset) : []), [result.chords, song.corrections, openOffset, ctx.standardShapes]);
+  const sounding = useMemo(() => (ctx.standardShapes ? beginnerTimeline(result.chords, song.corrections, openOffset) : []), [result.chords, song.corrections, openOffset, ctx.standardShapes]);
   const capoChoices = useMemo(() => capoOptions(sounding.map((c) => ({ label: c.display, start: c.start, end: c.end }))), [sounding]);
   const recommended = useMemo(() => (sounding.length ? recommendCapo(sounding.map((c) => ({ label: c.display, start: c.start, end: c.end }))) : null), [sounding]);
-  const tabBars = useMemo(() => practiceTab(timeline, result.beats, practice.pattern, ctx.shapeMidi), [timeline, result.beats, practice.pattern, ctx.shapeMidi]);
+  // Beginner version by default: a song that hasn't been set up yet starts on the capo that
+  // gives the easiest open shapes.
+  const autoCapo = useRef(false);
+  useEffect(() => {
+    if (autoCapo.current || song.practice || !recommended) return;
+    autoCapo.current = true;
+    setPractice({ capo: recommended.capo });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [song.id, recommended]);
   const beats = useMemo(() => extendBeats(result.beats), [result.beats]);
-  const barOffset = useMemo(() => chooseBarOffset(beats, timeline.filter((c) => c.label !== 'N').map((c) => c.start)), [beats, timeline]);
+  const barOffset = useMemo(() => songBarOffset(result, beats), [result, beats]);
+  const tabBars = useMemo(() => practiceTab(timeline, result.beats, practice.pattern, ctx.shapeMidi, barOffset), [timeline, result.beats, practice.pattern, ctx.shapeMidi, barOffset]);
 
   const index = segmentAt(timeline, time);
   const current = index >= 0 ? timeline[index] : null;
   const next = upcoming(timeline, index, 4);
   const tabPos = isLoaded ? stepAt(tabBars, time) : null;
-  const beat = isLoaded && player.playing ? beatInBar(beats, time, barOffset) : null;
+  // The beat lamp reads the same clock as the strum highlight and the metronome.
+  const [clockBeat, setClockBeat] = useState<number | null>(null);
+  useEffect(
+    () =>
+      player.clock.subscribe((t) => {
+        const b = player.clock.playing() ? beatInBar(beats, t, barOffset) : null;
+        setClockBeat((prev) => (prev === b ? prev : b));
+      }),
+    [player.clock, beats, barOffset],
+  );
+  const beat = isLoaded && player.playing ? clockBeat : null;
   const countIn = isLoaded && player.countingIn ? player.countingIn.beat : null;
   const [tonic, mode] = result.key ? result.key.split(' ') : [null, null];
   const soundingKey = tonic ? `${transposeLabel(tonic, practice.keyShift)} ${mode === 'minor' ? 'min' : 'maj'}` : 'Unknown';

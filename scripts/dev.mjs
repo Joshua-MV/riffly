@@ -10,6 +10,8 @@
  *   npm run transcribe-server
  *                        Optional: the Python server for the experimental "Transcribe" tab.
  *   npm run setup        Install dependencies only.
+ *   npm run shortcut     Add "Riffly" to the Start menu (Windows search finds it). It opens the
+ *                        app and rebuilds it first whenever the code has changed.
  *
  * Plain Node.js, no extra dependencies.
  */
@@ -38,21 +40,8 @@ const fail = (msg) => {
 
 // Rust's cargo lives in ~/.cargo/bin; terminals opened before Rust was installed don't have it.
 const cargoBin = path.join(process.env.USERPROFILE ?? process.env.HOME ?? '', '.cargo', 'bin');
-// The on-device lyrics engine (whisper.cpp) builds with CMake, which ships with the Visual
-// Studio C++ Build Tools but isn't on PATH by default.
-function vsCmakeBin() {
-  if (!isWin) return null;
-  const vswhere = path.join(process.env['ProgramFiles(x86)'] ?? 'C:\\Program Files (x86)', 'Microsoft Visual Studio', 'Installer', 'vswhere.exe');
-  if (!existsSync(vswhere)) return null;
-  const res = spawnSync(vswhere, ['-products', '*', '-requires', 'Microsoft.VisualStudio.Component.VC.Tools.x86.x64', '-property', 'installationPath'], { encoding: 'utf8' });
-  const vs = res.stdout?.trim().split(/\r?\n/)[0];
-  const bin = vs && path.join(vs, 'Common7', 'IDE', 'CommonExtensions', 'Microsoft', 'CMake', 'CMake', 'bin');
-  return bin && existsSync(path.join(bin, 'cmake.exe')) ? bin : null;
-}
-const cmakeBin = vsCmakeBin();
-const PATH = [cargoBin, cmakeBin, process.env.PATH ?? process.env.Path ?? ''].filter(Boolean).join(path.delimiter);
-// Use whisper.cpp's bundled Rust bindings (generating them would need LLVM/clang installed).
-const toolEnv = { ...process.env, PATH, Path: PATH, WHISPER_DONT_GENERATE_BINDINGS: '1' };
+const PATH = `${cargoBin}${path.delimiter}${process.env.PATH ?? process.env.Path ?? ''}`;
+const toolEnv = { ...process.env, PATH, Path: PATH };
 
 /** npm/npx are .cmd files on Windows and must go through a shell (fixed args, no escaping needed). */
 function command(cmd, args) {
@@ -174,6 +163,31 @@ async function main() {
       if (!(await portFree(8000))) fail('Port 8000 is already in use (is the server already running?).');
       runForeground('Transcription server (http://localhost:8000)', venvPython, ['-m', 'uvicorn', 'app.main:app', '--port', '8000'], backend);
       return;
+
+    case 'shortcut': {
+      // A "Riffly" entry in the Start menu (so Windows search finds it). It runs this launcher,
+      // which rebuilds the app first whenever the code has changed, then opens it. If a build
+      // fails, the window stays open ("pause") so the error can be read.
+      if (!isWin) fail('The Start-menu shortcut is for Windows.');
+      const programs = path.join(process.env.APPDATA ?? '', 'Microsoft', 'Windows', 'Start Menu', 'Programs');
+      const link = path.join(programs, 'Riffly.lnk');
+      const icon = path.join(tauriDir, 'icons', 'icon.ico');
+      const args = `/c ""${process.execPath}" "${path.join(root, 'scripts', 'dev.mjs')}" open || pause"`;
+      const ps = [
+        `$s = (New-Object -ComObject WScript.Shell).CreateShortcut('${link.replace(/'/g, "''")}')`,
+        `$s.TargetPath = '${path.join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'cmd.exe')}'`,
+        `$s.Arguments = '${args.replace(/'/g, "''")}'`,
+        `$s.WorkingDirectory = '${root.replace(/'/g, "''")}'`,
+        `$s.IconLocation = '${icon.replace(/'/g, "''")}'`,
+        `$s.WindowStyle = 7`,
+        `$s.Description = 'Riffly: guitar tuner and play-along'`,
+        `$s.Save()`,
+      ].join('; ');
+      const res = spawnSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', ps], { stdio: 'inherit' });
+      if (res.status !== 0) fail('Could not create the Start-menu shortcut.');
+      say(`Added "Riffly" to the Start menu (${link}). Search for Riffly to open it.`);
+      return;
+    }
 
     default: {
       setupApp();

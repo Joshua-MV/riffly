@@ -39,6 +39,8 @@ struct TempoResult {
 
 struct StrumResult {
   std::string pattern;                  // 8 eighth notes of a 4/4 bar: D (down), U (up), - (rest)
+  std::string pattern_id;               // which common pattern suits it ("folk", "ballad"…)
+  double busyness = 0;                  // how often in-between eighths are struck vs the beats
   int downbeat = 0;                     // index (mod 4) of the beat that starts a bar
   bool sixteenth_feel = false;          // strong in-between sixteenths (busy strumming)
   double confidence = 0;

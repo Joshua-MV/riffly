@@ -32,13 +32,13 @@ export function slotAt(beats: readonly number[], barOffset: number, t: number): 
   let hi = beats.length - 1;
   while (lo <= hi) {
     const mid = (lo + hi) >> 1;
-    if (beats[mid] <= t + 0.03) {
+    if (beats[mid] <= t) {
       i = mid;
       lo = mid + 1;
     } else hi = mid - 1;
   }
   if (i < 0 || i >= beats.length - 1) return -1;
-  const half = t + 0.03 >= (beats[i] + beats[i + 1]) / 2 ? 1 : 0;
+  const half = t >= (beats[i] + beats[i + 1]) / 2 ? 1 : 0;
   return ((((i - barOffset) % 4) + 4) % 4) * 2 + half;
 }
 

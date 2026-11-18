@@ -1,0 +1,74 @@
+/* Riffly colours. Generated from frontend/src/theme/tokens.ts by "npm run brand"; don't edit by hand. */
+
+:root {
+  /* Brand */
+  --brand-charcoal: #252622;
+  --brand-ivory: #F2EEE4;
+  --brand-amber: #C58A45;
+  --brand-olive: #65745B;
+  --brand-terracotta: #A65D48;
+  --brand-stone: #77766F;
+
+  /* Dark theme (default) */
+  --background: #252622;
+  --background-raised: #1E1F1B;
+  --surface: #2E2F2A;
+  --surface-hover: #373832;
+  --surface-sunken: #1E1F1B;
+  --border: #3E3F39;
+  --border-strong: #4C4D46;
+  --divider: #32332E;
+  --text: #F2EEE4;
+  --text-muted: #B3B0A6;
+  --text-subtle: #9C9A91;
+  --text-disabled: #5E5D57;
+  --text-inverse: #252622;
+  --accent: #C58A45;
+  --accent-pressed: #D29A57;
+  --accent-soft: rgba(197,138,69,0.16);
+  --on-accent: #1E1F1B;
+  --highlight: #D9A15E;
+  --highlight-soft: rgba(197,138,69,0.14);
+  --success: #8FA07F;
+  --success-soft: rgba(101,116,91,0.28);
+  --danger: #C97A63;
+  --danger-soft: rgba(166,93,72,0.22);
+  --warning: #BFA266;
+  --warning-soft: rgba(191,162,102,0.16);
+  --disabled: #373832;
+  --on-disabled: #5E5D57;
+  --focus-ring: #D9A15E;
+  --scrim: rgba(20,21,18,0.72);
+}
+
+[data-theme='light'] {
+  --background: #F2EEE4;
+  --background-raised: #E9E4D8;
+  --surface: #FAF8F2;
+  --surface-hover: #E4DED1;
+  --surface-sunken: #E9E4D8;
+  --border: #D6CFC0;
+  --border-strong: #C2B9A7;
+  --divider: #E2DCCF;
+  --text: #252622;
+  --text-muted: #55544E;
+  --text-subtle: #6B6A63;
+  --text-disabled: #A9A69C;
+  --text-inverse: #F2EEE4;
+  --accent: #C58A45;
+  --accent-pressed: #B57B38;
+  --accent-soft: rgba(197,138,69,0.18);
+  --on-accent: #252622;
+  --highlight: #8F5E24;
+  --highlight-soft: rgba(197,138,69,0.16);
+  --success: #4E5C45;
+  --success-soft: rgba(101,116,91,0.18);
+  --danger: #8E4A37;
+  --danger-soft: rgba(166,93,72,0.14);
+  --warning: #7D6630;
+  --warning-soft: rgba(191,162,102,0.18);
+  --disabled: #E4DED1;
+  --on-disabled: #A9A69C;
+  --focus-ring: #8F5E24;
+  --scrim: rgba(37,38,34,0.45);
+}

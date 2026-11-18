@@ -10,7 +10,7 @@ import { useLayout } from '@/theme/useLayout';
 
 import { goTo, Rail, usePracticeSong, type Destination } from './Rail';
 
-const KEYS: Record<string, Destination> = { '1': 'tuner', '2': 'songs', '3': 'play', '4': 'lyrics', '5': 'strum', '6': 'tab', '7': 'learn' };
+const KEYS: Record<string, Destination> = { '1': 'tuner', '2': 'songs', '3': 'play', '4': 'strum', '5': 'tab', '6': 'learn' };
 
 /**
  * One window, three zones: the rail (where you are), the stage (what you're doing) and the

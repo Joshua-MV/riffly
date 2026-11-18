@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/Button';
 import { Icon } from '@/components/ui/Icon';
 import { Chip, EmptyState, Notice, Screen, SearchField, SegmentedControl } from '@/components/ui/primitives';
 import type { PressState } from '@/components/ui/pressState';
+import { Stagger } from '@/components/ui/FadeIn';
 import { Text } from '@/components/ui/Text';
 import { ImportList } from '@/features/library/ImportList';
 import { practiceOf, type LocalSong } from '@/features/library/model';
@@ -25,7 +26,7 @@ type Filter = 'all' | 'ready' | 'standard' | 'alt' | 'review' | 'favourites';
 type Sort = 'recent' | 'title' | 'key';
 
 function confirmDelete(song: LocalSong, onConfirm: () => void) {
-  const message = `Remove “${song.title}” from Riffly? Its MP3, chords, lyrics and your corrections are deleted from this computer.`;
+  const message = `Remove “${song.title}” from Riffly? Its MP3, chords and your corrections are deleted from this computer.`;
   if (isTauri()) {
     // The Windows app's web view doesn't show window.confirm (it would answer "yes" without
     // asking), so use a real Windows dialog. Anything but an explicit "Remove" keeps the song.
@@ -126,12 +127,14 @@ export default function LibraryScreen() {
         <View style={{ gap: spacing.md }}>
           <Text variant="overline" tone="subtle">Recently played</Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: spacing.md }}>
-            {recent.map((s) => (
-              <Pressable key={s.id} role="link" accessibilityLabel={`Open ${s.title}`} onPress={() => open(s)} style={({ hovered }: PressState) => [styles.tile, hovered && { opacity: 0.92 }]}>
+            {recent.map((s, i) => (
+              <Stagger key={s.id} index={i}>
+              <Pressable role="link" accessibilityLabel={`Open ${s.title}`} onPress={() => open(s)} style={({ hovered, pressed }: PressState) => [styles.tile, { transform: [{ translateY: hovered && !pressed ? -3 : 0 }, { scale: pressed ? 0.98 : 1 }] }]}>
                 <BigTile songKey={s.analysis.key} />
                 <Text variant="bodyStrong" numberOfLines={1} style={{ marginTop: spacing.sm }}>{s.title}</Text>
                 <Text variant="caption" tone="subtle" numberOfLines={1}>{s.artist ?? 'Unknown artist'}</Text>
               </Pressable>
+              </Stagger>
             ))}
           </ScrollView>
         </View>
@@ -169,14 +172,14 @@ export default function LibraryScreen() {
               <View style={styles.cAct} />
             </View>
           )}
-          {rows.map((s) => {
+          {rows.map((s, rowIndex) => {
             const nowPlaying = player.song?.id === s.id && player.playing;
             const review = confidenceOf(s) < 0.45;
             const status = nowPlaying ? { text: 'Now playing', color: colors.highlight } : review ? { text: 'Low confidence — review chords', color: colors.warning } : { text: 'Ready to play', color: colors.success };
             const tuning = tuningById(practiceOf(s).tuning).name;
             return (
+              <Stagger key={s.id} index={rowIndex + recent.length}>
               <Pressable
-                key={s.id}
                 role="link"
                 accessibilityLabel={`${s.title}. ${s.analysis.key ?? ''} ${s.analysis.bpm ? Math.round(s.analysis.bpm) + ' BPM' : ''}. ${status.text}`}
                 onPress={() => open(s)}
@@ -225,6 +228,7 @@ export default function LibraryScreen() {
                   </Pressable>
                 </View>
               </Pressable>
+              </Stagger>
             );
           })}
         </View>

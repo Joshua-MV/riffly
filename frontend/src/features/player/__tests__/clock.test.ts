@@ -52,3 +52,50 @@ describe('playback clock', () => {
     expect(seen).toEqual([0, 3]);
   });
 });
+
+describe('playback clock with a live source', () => {
+  it('follows the player position exactly while playing', () => {
+    let ms = 0;
+    let live = 10;
+    const c = createClock(() => ms);
+    c.setSource(() => live);
+    c.report(9.8, true, 1); // a late report
+    ms = 100;
+    live = 10.1;
+    expect(c.now()).toBeCloseTo(10.1);
+    live = 10.12;
+    expect(c.now()).toBeCloseTo(10.12);
+  });
+
+  it('ignores the source while paused and never steps backwards', () => {
+    let ms = 0;
+    let live = 5;
+    const c = createClock(() => ms);
+    c.setSource(() => live);
+    c.report(5, false, 1);
+    live = 99;
+    expect(c.now()).toBeCloseTo(5);
+    c.report(5, true, 1);
+    live = 5.2;
+    ms = 200;
+    expect(c.now()).toBeCloseTo(5.2);
+    live = 5.19;
+    expect(c.now()).toBeGreaterThanOrEqual(5.2 - 1e-9);
+  });
+});
+
+describe('playback clock delay', () => {
+  it('runs the set delay (scaled by speed) behind the player while playing, not while paused', () => {
+    let ms = 0;
+    let live = 20;
+    const c = createClock(() => ms);
+    c.setSource(() => live);
+    c.setDelay(0.12);
+    c.report(20, false, 1);
+    expect(c.now()).toBeCloseTo(20);
+    c.report(20, true, 0.5);
+    ms = 1000;
+    live = 20.5;
+    expect(c.now()).toBeCloseTo(20.5 - 0.06);
+  });
+});

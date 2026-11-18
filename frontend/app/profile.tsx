@@ -1,4 +1,3 @@
-import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Platform, Pressable, StyleSheet, View } from 'react-native';
 
@@ -12,13 +11,13 @@ import { updateSettings, useSettings } from '@/features/settings/store';
 import { useSongs } from '@/features/songs/hooks';
 import { formatBytes } from '@/features/songs/timeline';
 import { GUITAR_TUNINGS } from '@/lib/music/instruments';
-import { lyricsEngine } from '@/services/lyricsEngine';
+import { isTauri } from '@tauri-apps/api/core';
 import { useTheme, type SchemePreference } from '@/theme/ThemeProvider';
 import { useLayout } from '@/theme/useLayout';
 import { brand, darkColors, lightColors, radius, spacing } from '@/theme/tokens';
 
 const SHORTCUTS: [string, string][] = [
-  ['Jump to Tuner … Chords & drills', '1 – 7'],
+  ['Jump to Tuner … Chords & drills', '1 – 6'],
   ['Settings', 'Ctrl ,'],
   ['Play / pause', 'Space'],
   ['Seek ±5 s · ±1 bar with Shift', '← →'],
@@ -31,7 +30,6 @@ const SHORTCUTS: [string, string][] = [
 ];
 
 const LICENCES: [string, string][] = [
-  ['whisper.cpp (on-device lyrics)', 'MIT'],
   ['minimp3 (MP3 decoding)', 'CC0'],
   ['dr_wav (WAV decoding)', 'Public domain / MIT-0'],
   ['LAME (MP3 encoding)', 'LGPL'],
@@ -45,12 +43,10 @@ export default function SettingsScreen() {
   const { isPhone } = useLayout();
   const settings = useSettings();
   const songs = useSongs();
-  const model = useQuery({ queryKey: ['lyrics-model'], queryFn: () => lyricsEngine.status(), enabled: lyricsEngine.available() });
   const [panel, setPanel] = useState<'none' | 'keys' | 'licences'>('none');
   const songBytes = (songs.data ?? []).reduce((n, s) => n + s.audioBytes, 0);
-  const analysisBytes = (songs.data ?? []).reduce((n, s) => n + JSON.stringify(s.analysis).length + JSON.stringify(s.lyrics ?? '').length, 0);
-  const modelBytes = model.data?.present ? model.data.bytes : 0;
-  const total = songBytes + analysisBytes + modelBytes;
+  const analysisBytes = (songs.data ?? []).reduce((n, s) => n + JSON.stringify(s.analysis).length, 0);
+  const total = songBytes + analysisBytes;
 
   return (
     <Screen maxWidth={1180}>
@@ -107,6 +103,14 @@ export default function SettingsScreen() {
           <Row label="Accent first beat" sub="A higher click on beat 1 of each bar">
             <Toggle value={settings.accentFirstBeat} onChange={(v) => updateSettings({ accentFirstBeat: v })} label="Accent first beat" />
           </Row>
+          <Row label="Beat timing" sub="If the beat lamp, strum and click feel early, raise this; if late, lower it">
+            <Stepper
+              label="beat timing"
+              value={`${settings.syncDelayMs} ms`}
+              onMinus={() => updateSettings({ syncDelayMs: Math.max(0, settings.syncDelayMs - 10) })}
+              onPlus={() => updateSettings({ syncDelayMs: Math.min(400, settings.syncDelayMs + 10) })}
+            />
+          </Row>
           <Row label="Count-in length" sub="Before play, when count-in is on">
             <Text variant="mono" style={{ fontSize: 12 }}>1 BAR</Text>
           </Row>
@@ -130,14 +134,12 @@ export default function SettingsScreen() {
           </View>
           <View style={[styles.bar, { backgroundColor: colors.surfaceSunken }]}>
             <View style={{ flex: songBytes || 0.0001, backgroundColor: brand.amber }} />
-            <View style={{ flex: modelBytes || 0.0001, backgroundColor: brand.olive }} />
             <View style={{ flex: analysisBytes || 0.0001, backgroundColor: brand.terracotta }} />
           </View>
           <Legend color={brand.amber} text={`Songs ${formatBytes(songBytes)} · ${songs.data?.length ?? 0} MP3s`} />
-          {lyricsEngine.available() && <Legend color={brand.olive} text={`Lyrics model ${model.data?.present ? formatBytes(modelBytes) : 'not downloaded'}`} />}
-          <Legend color={brand.terracotta} text={`Analysis and lyrics ${formatBytes(analysisBytes)}`} />
+          <Legend color={brand.terracotta} text={`Analysis ${formatBytes(analysisBytes)}`} />
           <View style={[styles.path, { borderColor: colors.border, backgroundColor: colors.surfaceSunken }]}>
-            <Text variant="mono" tone="muted" style={{ fontSize: 12 }}>{Platform.OS === 'web' && lyricsEngine.available() ? '%APPDATA%\\app.riffly' : storage.location}</Text>
+            <Text variant="mono" tone="muted" style={{ fontSize: 12 }}>{Platform.OS === 'web' && isTauri() ? '%APPDATA%\\app.riffly' : storage.location}</Text>
           </View>
           <Text variant="caption" tone="subtle">No account and no cloud: nothing syncs between devices. Use “Save MP3” on a song to keep a copy elsewhere.</Text>
         </Card>
@@ -146,7 +148,7 @@ export default function SettingsScreen() {
           <Logo size={30} />
           <View style={{ flex: 1, gap: 2, minWidth: 220 }}>
             <Text variant="subheading">Version 1.0.0 · {Platform.OS === 'web' ? 'Windows' : 'Android'}</Text>
-            <Text variant="caption" tone="muted">Free and offline. No accounts, no tracking, no uploads. Speech recognition by whisper.cpp.</Text>
+            <Text variant="caption" tone="muted">Free and offline. No accounts, no tracking, no uploads.</Text>
           </View>
           <Button label="Keyboard shortcuts" variant="secondary" size="sm" onPress={() => setPanel(panel === 'keys' ? 'none' : 'keys')} />
           <Button label="Licences" variant="secondary" size="sm" onPress={() => setPanel(panel === 'licences' ? 'none' : 'licences')} />

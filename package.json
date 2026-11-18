@@ -9,6 +9,8 @@
     "dev:live": "node scripts/dev.mjs live",
     "transcribe-server": "node scripts/dev.mjs transcribe-server",
     "setup": "node scripts/dev.mjs setup",
+    "shortcut": "node scripts/dev.mjs shortcut",
+    "brand": "node scripts/brand.cjs",
     "test": "npm --prefix frontend test && cmd /c engine\\build.cmd"
   },
   "engines": {

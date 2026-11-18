@@ -37,6 +37,14 @@ struct Params {
   double switch_beat = 0.10;  // chance of a change at a beat
   double switch_half = 0.02;  // chance of a change half way through a beat (pushed changes)
   double vocab_prior = 0.0;   // song-vocabulary prior strength (2nd pass); 0 = off
+  int core = 1;               // 2nd pass restricted to the song's core chords
+  int tempo_check = 1;        // compare related tempos (4:3, 3:2…) by how well their grid hits the beats
+  int phase_check = 1;        // move the grid half a beat when the in-between positions are stronger
+  double beat_lag = 0.025;    // onset peaks come ~25 ms after the attack: move beats earlier by this
+  double core_cover = 0.9;    // core chords: the most used, until they cover this share of the song
+  double core_min = 0.04;     // ...each with at least this share
+  int core_max = 5;           // ...and at most this many
+  double min_chord_frac = 0.6; // chords shorter than this share of the song's usual chord are passing chords
   double seg_complexity = 0.6;  // complexity penalty scale when re-deciding a whole chord's quality
   int median = 3;             // chroma median filter length in frames
   int tempo_comb = 2;         // tempo: also reward the lag's multiples (metre-consistent periods)
@@ -66,6 +74,14 @@ const Params& tuning_params() {
     if (const char* v = std::getenv("RIFFLY_SWBEAT")) q.switch_beat = std::atof(v);
     if (const char* v = std::getenv("RIFFLY_SWHALF")) q.switch_half = std::atof(v);
     if (const char* v = std::getenv("RIFFLY_VPRIOR")) q.vocab_prior = std::atof(v);
+    if (const char* v = std::getenv("RIFFLY_CORE")) q.core = std::atoi(v);
+    if (const char* v = std::getenv("RIFFLY_MINCHORD")) q.min_chord_frac = std::atof(v);
+    if (const char* v = std::getenv("RIFFLY_TCHECK")) q.tempo_check = std::atoi(v);
+    if (const char* v = std::getenv("RIFFLY_PCHECK")) q.phase_check = std::atoi(v);
+    if (const char* v = std::getenv("RIFFLY_LAG")) q.beat_lag = std::atof(v);
+    if (const char* v = std::getenv("RIFFLY_CORECOVER")) q.core_cover = std::atof(v);
+    if (const char* v = std::getenv("RIFFLY_COREMIN")) q.core_min = std::atof(v);
+    if (const char* v = std::getenv("RIFFLY_COREMAX")) q.core_max = std::atoi(v);
     if (const char* v = std::getenv("RIFFLY_SEGCX")) q.seg_complexity = std::atof(v);
     if (const char* v = std::getenv("RIFFLY_MEDIAN")) q.median = std::atoi(v);
     if (const char* v = std::getenv("RIFFLY_COMB")) q.tempo_comb = std::atoi(v);
@@ -706,6 +722,41 @@ std::vector<ChordSegment> recognise_chords_on_grid(const ChromaResult& cr, const
     }
   }
 
+  // Second pass restricted to the song's core chords. Songs use a handful of chords; the
+  // first pass's rare ones are mostly misreadings (a sung note turning Ab into Fm for a beat),
+  // so the whole song is read again choosing only among the chords that cover most of it.
+  // This also makes the result stable: small differences can't introduce new chord names.
+  if (P.core) {
+    auto fam = [&](size_t s) { return states[s].root * 2 + ((states[s].quality == "min") ? 1 : 0); };
+    std::vector<double> share(24, 0.0);
+    double total = 0;
+    for (size_t u = 0; u < U; ++u) {
+      if (path[u] == S - 1) continue;
+      const double len = bounds[u + 1] - bounds[u];
+      share[fam(path[u])] += len;
+      total += len;
+    }
+    if (total > 0) {
+      std::vector<int> order(24);
+      std::iota(order.begin(), order.end(), 0);
+      std::sort(order.begin(), order.end(), [&](int a, int b) { return share[a] > share[b]; });
+      std::vector<char> keep(24, 0);
+      double covered = 0;
+      int kept = 0;
+      for (int k : order) {
+        const double f = share[k] / total;
+        if (kept >= 2 && (covered >= P.core_cover || kept >= P.core_max || f < P.core_min)) break;
+        if (f <= 0) break;
+        keep[k] = 1;
+        covered += f;
+        ++kept;
+      }
+      std::vector<double> bonus = base_bonus;
+      for (size_t s = 0; s + 1 < S; ++s) if (!keep[fam(s)]) bonus[s] -= 10.0;  // effectively excluded
+      path = decode(bonus, &probs);
+    }
+  }
+
   // Segments: runs of units with the same chord *root* (C, Cadd9 and C/E flickering is one
   // chord). Each segment's quality and bass are then re-decided from the whole segment's
   // average, which is far cleaner evidence than single beats.
@@ -745,6 +796,74 @@ std::vector<ChordSegment> recognise_chords_on_grid(const ChromaResult& cr, const
     }
     segs.push_back(seg);
     start = i;
+  }
+  // While the band plays there is always a chord to strum: a "no chord" stretch between two
+  // chords (a drum break, a held vocal) keeps the chord before it. Only the silent start and end
+  // stay empty.
+  {
+    size_t first = 0, last = segs.size();
+    while (first < segs.size() && segs[first].label == "N") ++first;
+    while (last > first && segs[last - 1].label == "N") --last;
+    std::vector<ChordSegment> merged;
+    for (size_t i = 0; i < segs.size(); ++i) {
+      ChordSegment cur = segs[i];
+      if (i > first && i < last && cur.label == "N" && !merged.empty()) {
+        merged.back().end = cur.end;
+        continue;
+      }
+      if (!merged.empty() && merged.back().label == cur.label && i > first && i < last) {
+        merged.back().end = cur.end;
+        continue;
+      }
+      merged.push_back(cur);
+    }
+    segs.swap(merged);
+  }
+
+  // Passing chords: a chord that lasts much less than this song's usual chord (a beat or two
+  // squeezed between two others) is mostly a melody note or a fill. A player keeps strumming
+  // the chord before it, so it is folded into that one.
+  if (P.min_chord_frac > 0 && segs.size() > 2 && beats.size() > 4) {
+    std::vector<double> iv;
+    for (size_t i = 1; i < beats.size(); ++i) iv.push_back(beats[i] - beats[i - 1]);
+    const double beat = percentile(iv, 50);
+    std::vector<double> lens;
+    for (const auto& sg : segs) if (sg.label != "N") lens.push_back((sg.end - sg.start) / beat);
+    const double usual = lens.empty() ? 4.0 : percentile(lens, 50);
+    const double shortest = std::max(1.6, P.min_chord_frac * usual);
+    auto minor = [](const ChordSegment& c) { return c.quality == "min" || c.quality == "m7" || c.quality == "dim"; };
+    auto same = [&](const ChordSegment& a, const ChordSegment& b) { return a.root == b.root && minor(a) == minor(b); };
+    auto name = [&](const ChordSegment& c) { return std::string(kPitchNames[c.root]) + (minor(c) ? "m" : ""); };
+    // A short chord that the song's main loop plays in exactly this place (Am G C, with a
+    // two-beat G) is part of the song, not a passing chord.
+    const std::vector<std::string> loop = main_progression(segs);
+    auto in_loop = [&](size_t i) {
+      if (loop.size() < 3 || i == 0 || i + 1 >= segs.size() || segs[i - 1].label == "N" || segs[i + 1].label == "N") return false;
+      const std::string a = name(segs[i - 1]), b = name(segs[i]), c = name(segs[i + 1]);
+      for (size_t k = 0; k < loop.size(); ++k)
+        if (loop[k] == a && loop[(k + 1) % loop.size()] == b && loop[(k + 2) % loop.size()] == c) return true;
+      return false;
+    };
+    bool changed = true;
+    while (changed) {
+      changed = false;
+      for (size_t i = 0; i < segs.size(); ++i) {
+        if (segs[i].label == "N" || (segs[i].end - segs[i].start) / beat >= shortest || in_loop(i)) continue;
+        const bool has_prev = i > 0 && segs[i - 1].label != "N";
+        const bool has_next = i + 1 < segs.size() && segs[i + 1].label != "N";
+        if (!has_prev && !has_next) continue;
+        if (has_prev) segs[i - 1].end = segs[i].end;
+        else segs[i + 1].start = segs[i].start;
+        segs.erase(segs.begin() + static_cast<long>(i));
+        // The chords either side may now be the same chord: join them.
+        if (has_prev && i < segs.size() && segs[i].label != "N" && same(segs[i - 1], segs[i])) {
+          segs[i - 1].end = segs[i].end;
+          segs.erase(segs.begin() + static_cast<long>(i));
+        }
+        changed = true;
+        break;
+      }
+    }
   }
   return segs;
 }
@@ -907,23 +1026,26 @@ std::optional<TempoResult> estimate_tempo(const std::vector<float>& x) {
     }
     mel_db.push_back(std::move(bands));
   });
-  std::vector<float> onset(mel_db.size(), 0.0f), strum(mel_db.size(), 0.0f);
+  std::vector<float> onset(mel_db.size(), 0.0f), strum(mel_db.size(), 0.0f), low(mel_db.size(), 0.0f);
   // Strum envelope: the same flux over the guitar's main range only (300 Hz - 4 kHz), so kick
   // drums and hi-hats count less than strummed chords.
   const double mmax = hz_to_mel(kAnalysisRate / 2);
-  size_t s_lo = filters.size(), s_hi = 0;
+  size_t s_lo = filters.size(), s_hi = 0, l_hi = 0;
   for (size_t k = 0; k < filters.size(); ++k) {
     const double centre = mel_to_hz(mmax * (k + 1) / (filters.size() + 1));
     if (centre >= 300 && centre <= 4000) { s_lo = std::min(s_lo, k); s_hi = std::max(s_hi, k); }
+    if (centre <= 180) l_hi = std::max(l_hi, k);
   }
   for (size_t t = 1; t < mel_db.size(); ++t) {
-    double flux = 0, sflux = 0;
+    double flux = 0, sflux = 0, lflux = 0;
     for (size_t k = 0; k < filters.size(); ++k) {
       const float cur = std::max(mel_db[t][k], global_max - 80.0f), prev = std::max(mel_db[t - 1][k], global_max - 80.0f);
       const float d = std::max(0.0f, cur - prev);
       flux += d;
       if (k >= s_lo && k <= s_hi) sflux += d;
+      if (k <= l_hi) lflux += d;
     }
+    low[t] = static_cast<float>(lflux / (l_hi + 1));
     onset[t] = static_cast<float>(flux / filters.size());
     strum[t] = static_cast<float>(sflux / std::max<size_t>(1, s_hi - s_lo + 1));
   }
@@ -933,6 +1055,7 @@ std::optional<TempoResult> estimate_tempo(const std::vector<float>& x) {
   // of the frame where it begins; do the same so beat times line up.
   onset.insert(onset.begin(), kOnsetFft / (2 * kOnsetHop), 0.0f);
   strum.insert(strum.begin(), kOnsetFft / (2 * kOnsetHop), 0.0f);
+  low.insert(low.begin(), kOnsetFft / (2 * kOnsetHop), 0.0f);
   const size_t N = onset.size();
   if (N < 16) return std::nullopt;
   // Normalise by the standard deviation (ddof = 1), exactly as librosa's beat tracker does.
@@ -981,6 +1104,51 @@ std::optional<TempoResult> estimate_tempo(const std::vector<float>& x) {
     const double a = ac[best_lag - 1], b = ac[best_lag], c = ac[best_lag + 1];
     const double denom = a - 2 * b + c;
     if (denom != 0) period += 0.5 * (a - c) / denom;
+  }
+
+  // Envelope peak near a (fractional) frame position.
+  auto env_at = [&](double x) {
+    const long long c = std::llround(x);
+    double m = 0;
+    for (long long d = -2; d <= 2; ++d) {
+      const long long i = c + d;
+      if (i >= 0 && i < static_cast<long long>(N)) m = std::max(m, env[static_cast<size_t>(i)]);
+    }
+    return m;
+  };
+  // How well a beat grid with this period lines up with the onsets, at its best phase.
+  auto grid_score = [&](double per) {
+    const int steps = std::max(4, static_cast<int>(std::round(per)));
+    double best = 0;
+    for (int ph = 0; ph < steps; ++ph) {
+      double sum = 0;
+      int n = 0;
+      for (double x = ph; x < static_cast<double>(N); x += per) { sum += env_at(x); ++n; }
+      if (n) best = std::max(best, sum / n);
+    }
+    return best;
+  };
+  // 2b. Related tempos: syncopated parts (accents every 3 sixteenths, triplet feels) make the
+  //     autocorrelation favour 4:3 of the real beat. The true beat's grid lands on the
+  //     strong hits every time; a related one only some of the time.
+  if (tuning_params().tempo_check) {
+    const double tempo_prior_exp = std::getenv("RIFFLY_TPRIOR") ? std::atof(std::getenv("RIFFLY_TPRIOR")) : 0.0;
+    const double tempo_margin = std::getenv("RIFFLY_TMARGIN") ? std::atof(std::getenv("RIFFLY_TMARGIN")) : 1.02;
+    auto prior = [&](double per) { return std::exp(-0.5 * std::pow(std::log2((60.0 * fps / per) / 120.0), 2)); };
+    double best_per = period;
+    double best_score = grid_score(period) * std::pow(prior(period), tempo_prior_exp);
+    // Only the 4:3 confusions: a 3:2 grid (two-thirds of the tempo) lands on the strongest hits
+    // alone and would look better than the real beat on evenly strummed songs.
+    for (double ratio : {4.0 / 3.0, 3.0 / 4.0}) {
+      const double cand = period * ratio;
+      if (cand < min_lag || cand > max_lag) continue;
+      const double sc = grid_score(cand) * std::pow(prior(cand), tempo_prior_exp);
+      // ...and the rhythm must really repeat at that period (autocorrelation at least as high).
+      const int cl = static_cast<int>(std::lround(cand)), pl = static_cast<int>(std::lround(period));
+      const bool repeats = cl <= ac_max && pl <= ac_max && ac[cl] >= ac[pl];
+      if (repeats && sc > best_score * tempo_margin) { best_score = sc; best_per = cand; }
+    }
+    period = best_per;
   }
 
   // 3. Dynamic-programming beat tracker (Ellis 2007).
@@ -1038,8 +1206,40 @@ std::optional<TempoResult> estimate_tempo(const std::vector<float>& x) {
   while (!frames.empty() && local[frames.back()] < thresh) frames.pop_back();
   if (frames.size() < 4) return std::nullopt;
 
+  // Off-beat lock: if the points half way between beats are clearly stronger than the beats
+  // themselves, the grid is on the "and"; move it half a beat.
+  if (tuning_params().phase_check && frames.size() > 8) {
+    // Kick drum and bass mark the beat far more reliably than strums and hi-hats, so they get
+    // the casting vote when there is enough low end.
+    auto low_at = [&](double x) {
+      const long long c = std::llround(x);
+      double m = 0;
+      for (long long d = -2; d <= 2; ++d) {
+        const long long i = c + d;
+        if (i >= 0 && i < static_cast<long long>(low.size())) m = std::max(m, static_cast<double>(low[static_cast<size_t>(i)]));
+      }
+      return m;
+    };
+    double on = 0, off = 0, lon = 0, loff = 0;
+    for (size_t i = 0; i + 1 < frames.size(); ++i) {
+      const double mid = 0.5 * (frames[i] + frames[i + 1]);
+      on += env_at(static_cast<double>(frames[i]));
+      off += env_at(mid);
+      lon += low_at(static_cast<double>(frames[i]));
+      loff += low_at(mid);
+    }
+    const bool low_says_off = lon + loff > 1e-6 && loff > 1.3 * lon;
+    const bool low_says_on = lon + loff > 1e-6 && lon > 1.3 * loff;
+    if ((off > 1.15 * on && !low_says_on) || (low_says_off && off > 0.85 * on)) {
+      std::vector<long long> shifted;
+      for (size_t i = 0; i + 1 < frames.size(); ++i) shifted.push_back((frames[i] + frames[i + 1]) / 2);
+      frames = shifted;
+    }
+  }
+
   TempoResult res;
-  for (long long f : frames) res.beats.push_back(f * kOnsetHop / kAnalysisRate);
+  const double lag = tuning_params().beat_lag;
+  for (long long f : frames) res.beats.push_back(std::max(0.0, f * kOnsetHop / kAnalysisRate - lag));
   res.strum_env = std::move(strum);
   res.env_fps = fps;
   double cv = 0;
@@ -1127,15 +1327,20 @@ std::optional<KeyResult> estimate_key(const ChromaResult& cr, const std::vector<
 }
 
 std::vector<std::string> main_progression(const std::vector<ChordSegment>& segs, size_t max_len) {
+  // On the simple chord names (Gadd9, G/B and G are all "G"): that's how the loop is played.
   std::vector<std::string> seq;
-  for (const auto& s : segs) if (s.label != "N" && (seq.empty() || seq.back() != s.label)) seq.push_back(s.label);
+  for (const auto& s : segs) {
+    if (s.root < 0) continue;
+    const bool minor = s.quality == "min" || s.quality == "m7" || s.quality == "dim";
+    const std::string name = std::string(kPitchNames[s.root]) + (minor ? "m" : "");
+    if (seq.empty() || seq.back() != name) seq.push_back(name);
+  }
   if (seq.empty()) return {};
   double best_score = 0;
   std::vector<std::string> best;
   for (size_t n = 2; n <= std::min(max_len, seq.size() / 2); ++n) {
     std::map<std::vector<std::string>, int> counts;
     for (size_t i = 0; i + n <= seq.size(); ++i) counts[std::vector<std::string>(seq.begin() + i, seq.begin() + i + n)]++;
-    // Most common n-gram; ties broken by first occurrence like Counter.most_common.
     std::vector<std::string> gram;
     int count = 0;
     for (size_t i = 0; i + n <= seq.size(); ++i) {
@@ -1145,10 +1350,35 @@ std::vector<std::string> main_progression(const std::vector<ChordSegment>& segs,
     std::vector<std::string> uniq(gram);
     std::sort(uniq.begin(), uniq.end());
     uniq.erase(std::unique(uniq.begin(), uniq.end()), uniq.end());
+    // A loop repeats chords only if it has to: G D G D is "G D" twice.
+    if (uniq.size() < n && n > 2) continue;
     const double score = count * static_cast<double>(n) * (static_cast<double>(uniq.size()) / n);
     if (count >= 2 && score > best_score) { best_score = score; best = gram; }
   }
-  if (!best.empty()) return best;
+  if (!best.empty()) {
+    // Start the loop on the song's first chord when it is part of the loop (songs usually open
+    // on the loop's first chord: Am G C, not G C Am); otherwise where the song first plays it.
+    const auto opener = std::find(best.begin(), best.end(), seq.front());
+    if (opener != best.end()) {
+      std::rotate(best.begin(), opener, best.end());
+      return best;
+    }
+    // The most common window can begin mid-loop
+    // (D Em C G instead of G D Em C).
+    const size_t n = best.size();
+    for (size_t i = 0; i + n <= seq.size(); ++i) {
+      for (size_t r = 0; r < n; ++r) {
+        bool match = true;
+        for (size_t k = 0; k < n && match; ++k) match = seq[i + k] == best[(r + k) % n];
+        if (match) {
+          std::vector<std::string> rotated;
+          for (size_t k = 0; k < n; ++k) rotated.push_back(best[(r + k) % n]);
+          return rotated;
+        }
+      }
+    }
+    return best;
+  }
   std::vector<std::string> distinct;
   for (const auto& l : seq) if (std::find(distinct.begin(), distinct.end(), l) == distinct.end()) distinct.push_back(l);
   if (distinct.size() > 4) distinct.resize(4);
@@ -1192,6 +1422,11 @@ std::optional<StrumResult> estimate_strum(const TempoResult& tempo, const std::v
     return static_cast<double>(m);
   };
   std::array<double, 16> acc{};
+  // Per bar: which eighths are struck? An eighth counts as a strum when it stands clearly above
+  // that bar's own floor, the in-between sixteenths (eighth-note strumming doesn't land there;
+  // only noise and hi-hats do). The bars then vote, so soft up-strums aren't averaged away.
+  std::array<double, 8> hits{};
+  const double hit_ratio = std::getenv("RIFFLY_STRUMHIT") ? std::atof(std::getenv("RIFFLY_STRUMHIT")) : 1.15;
   int bars = 0;
   for (size_t b = static_cast<size_t>(offset); b + 4 < beats.size(); b += 4) {
     std::array<double, 16> v{};
@@ -1205,6 +1440,11 @@ std::optional<StrumResult> estimate_strum(const TempoResult& tempo, const std::v
     }
     if (sum <= 1e-6) continue;
     for (int i = 0; i < 16; ++i) acc[i] += v[i] / (sum / 16);
+    std::array<double, 8> odd{};
+    for (int j = 0; j < 8; ++j) odd[j] = v[2 * j + 1];
+    std::sort(odd.begin(), odd.end());
+    const double floor = 0.5 * (odd[3] + odd[4]) + 1e-6;
+    for (int j = 0; j < 8; ++j) if (v[2 * j] > hit_ratio * floor) hits[j] += 1;
     ++bars;
   }
   if (bars < 4) return std::nullopt;
@@ -1213,26 +1453,32 @@ std::optional<StrumResult> estimate_strum(const TempoResult& tempo, const std::v
   for (int i = 0; i < 16; ++i) r.sixteenths[i] = acc[i] / bars;
   const double mx = *std::max_element(r.sixteenths.begin(), r.sixteenths.end());
   for (double& v : r.sixteenths) v = mx > 0 ? v / mx : 0;
-  for (int j = 0; j < 8; ++j) r.eighths[j] = r.sixteenths[2 * j];
-  // Hits: eighths clearly above the quietest ones. Downstrokes on the beat, upstrokes between.
-  std::array<double, 8> sorted = r.eighths;
-  std::sort(sorted.begin(), sorted.end());
-  const double lo = (sorted[0] + sorted[1]) / 2, hi = sorted[7];
-  const double cut = lo + 0.45 * (hi - lo);
-  double hit_sum = 0, miss_sum = 0;
-  int hits = 0, misses = 0;
-  for (int j = 0; j < 8; ++j) {
-    const bool hit = r.eighths[j] >= cut || j == 0;
-    r.pattern += hit ? (j % 2 == 0 ? 'D' : 'U') : '-';
-    (hit ? hit_sum : miss_sum) += r.eighths[j];
-    (hit ? hits : misses)++;
-  }
+  for (int j = 0; j < 8; ++j) r.eighths[j] = hits[j] / bars;  // how often each eighth is struck
+  // Which pattern suits this song? Picking out every up-strum from a full band recording isn't
+  // reliable (snare and hi-hat sit in the same range), but how busy the strumming is, is: how
+  // often the in-between eighths are struck compared with the beats. That and the tempo choose
+  // the common pattern with the same feel.
+  double on = 0, off = 0;
+  for (int j = 0; j < 8; ++j) (j % 2 ? off : on) += r.eighths[j];
+  const double busy = on > 0 ? off / on : 0;
+  const double bpm = tempo.bpm;
+  struct Style { const char* id; const char* pattern; };
+  Style style;
+  if (busy >= 0.62) style = {"folk", "D-DU-UDU"};
+  else if (busy >= 0.5) style = bpm < 95 ? Style{"ballad", "D---D-DU"} : Style{"drive", "D-D-D-DU"};
+  else style = {"downs", "D-D-D-D-"};
+  r.pattern = style.pattern;
+  r.pattern_id = style.id;
+  r.downbeat = offset;
+  // Clear when the busyness is well away from the boundaries between styles.
+  const double margin = std::min({std::abs(busy - 0.62), std::abs(busy - 0.5)});
+  r.busyness = busy;
+  r.confidence = std::round(std::clamp(0.4 + margin * 5.0, 0.0, 1.0) * 1000) / 1000;
   // 16th-note feel: the in-between sixteenths are nearly as strong as the eighths.
   double odd = 0, even = 0;
   for (int i = 0; i < 16; ++i) (i % 2 ? odd : even) += r.sixteenths[i];
   r.sixteenth_feel = odd > 0.8 * even;
-  const double contrast = hits && misses ? hit_sum / hits - miss_sum / misses : 0.2;
-  r.confidence = std::round(std::clamp(contrast * 2.0, 0.0, 1.0) * 1000) / 1000;
+
   return r;
 }
 
@@ -1306,13 +1552,15 @@ std::string to_json(const Analysis& a) {
   for (size_t i = 0; i < a.waveform.size(); ++i) o << (i ? "," : "") << num(a.waveform[i]);
   o << "]";
   if (a.strum) {
-    o << ",\"strum\":{\"pattern\":\"" << a.strum->pattern << "\",\"downbeat\":" << a.strum->downbeat
+    o << ",\"strum\":{\"pattern\":\"" << a.strum->pattern << "\",\"pattern_id\":\"" << a.strum->pattern_id << "\",\"downbeat\":" << a.strum->downbeat << ",\"busyness\":" << num(a.strum->busyness)
       << ",\"sixteenth_feel\":" << (a.strum->sixteenth_feel ? "true" : "false") << ",\"confidence\":" << num(a.strum->confidence)
-      << ",\"sixteenths\":[";
+      << ",\"eighths\":[";
+    for (int i = 0; i < 8; ++i) o << (i ? "," : "") << num(a.strum->eighths[i]);
+    o << "],\"sixteenths\":[";
     for (int i = 0; i < 16; ++i) o << (i ? "," : "") << num(a.strum->sixteenths[i]);
     o << "]}";
   }
-  o << ",\"model_version\":\"riffly-cpp-0.2.0+beat-sync\",\"processing_seconds\":" << num(a.processing_seconds, 2);
+  o << ",\"model_version\":\"riffly-cpp-0.5.0+beat-sync\",\"processing_seconds\":" << num(a.processing_seconds, 2);
   o << ",\"notes\":[";
   for (size_t i = 0; i < a.notes.size(); ++i) o << (i ? "," : "") << "\"" << esc(a.notes[i]) << "\"";
   o << "]}";

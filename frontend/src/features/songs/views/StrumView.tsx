@@ -7,7 +7,7 @@ import type { PressState } from '@/components/ui/pressState';
 import { Text } from '@/components/ui/Text';
 import { createClickScheduler } from '@/lib/audio/metronome';
 import type { ClickScheduler } from '@/lib/audio/metronome.types';
-import { STRUM_PATTERNS } from '@/lib/music/strum';
+import { STRUM_PATTERNS, strumChoice } from '@/lib/music/strum';
 import { useTheme } from '@/theme/ThemeProvider';
 import { useLayout } from '@/theme/useLayout';
 import { radius, spacing } from '@/theme/tokens';
@@ -15,7 +15,7 @@ import { radius, spacing } from '@/theme/tokens';
 import { slotAt } from '../components/StrumPanel';
 import type { SongPractice } from '../useSongPractice';
 
-import { StrumGlyphs } from './StrumGlyphs';
+import { StrumGlyphs, StrumKey } from './StrumGlyphs';
 
 type Mode = 'click' | 'song';
 
@@ -24,7 +24,7 @@ export function StrumView({ s }: { s: SongPractice }) {
   const { colors } = useTheme();
   const { isPhone } = useLayout();
   const { practice, result } = s;
-  const choice = practice.strum ?? 'auto';
+  const choice = strumChoice(practice.strum, result.strum);
   const detected = result.strum && /^[DU-]{8}$/.test(result.strum.pattern) ? result.strum.pattern : null;
   const [mode, setMode] = useState<Mode>('click');
   const songBpm = result.bpm ? Math.round(result.bpm) : 90;
@@ -90,7 +90,7 @@ export function StrumView({ s }: { s: SongPractice }) {
   };
   const songRunning = mode === 'song' && s.isLoaded && s.player.playing;
   const active = mode === 'click' ? running : songRunning;
-  const title = choice === 'auto' ? `${s.song.title} · ${detected ? 'detected' : 'folk / pop'}` : STRUM_PATTERNS.find((p) => p.id === choice)?.name ?? 'Pattern';
+  const title = choice === 'auto' ? 'This song' : STRUM_PATTERNS.find((p) => p.id === choice)?.name ?? 'Pattern';
 
   const row = (id: string, name: string, pattern: string, sub?: string) => {
     const on = choice === id;
@@ -107,7 +107,7 @@ export function StrumView({ s }: { s: SongPractice }) {
           <Text variant="bodyStrong" numberOfLines={1} style={{ flex: 1 }}>{name}</Text>
           <Text variant="mono" tone="subtle" style={{ fontSize: 10 }}>4/4</Text>
         </View>
-        <StrumGlyphs pattern={pattern} size={12} counts={false} />
+        <StrumGlyphs pattern={pattern} size={12} counts={false} words={false} />
         {sub && <Text variant="caption" tone="subtle">{sub}</Text>}
       </Pressable>
     );
@@ -118,9 +118,17 @@ export function StrumView({ s }: { s: SongPractice }) {
       <View style={[styles.list, !isPhone && { borderRightColor: colors.border, borderRightWidth: 1 }]}>
         <Text variant="title" style={{ fontSize: 30 }}>Strum</Text>
         <Text variant="overline" tone="subtle">From this song</Text>
-        {row('auto', `${s.song.title} · ${detected ? 'detected' : 'not detected'}`, detected ?? STRUM_PATTERNS[2].pattern, result.strum ? `${result.strum.confidence > 0.6 ? 'Clear' : result.strum.confidence > 0.3 ? 'Fairly clear' : 'Faint'} in this recording` : undefined)}
-        <Text variant="overline" tone="subtle" style={{ marginTop: spacing.md }}>Common patterns</Text>
-        {STRUM_PATTERNS.map((p) => row(p.id, p.name, p.pattern))}
+        {detected && (
+          <>
+            <Text variant="overline" tone="subtle">Suits this song</Text>
+            {row('auto', 'This song', detected, `Picked from how busy the recording's strumming is${result.bpm ? ` at ${Math.round(result.bpm)} BPM` : ''}`)}
+          </>
+        )}
+        <Text variant="overline" tone="subtle" style={{ marginTop: detected ? spacing.md : 0 }}>Easiest</Text>
+        {row(STRUM_PATTERNS[0].id, STRUM_PATTERNS[0].name, STRUM_PATTERNS[0].pattern, 'Best for learning a new song')}
+        <Text variant="overline" tone="subtle" style={{ marginTop: spacing.md }}>When that feels easy</Text>
+        {STRUM_PATTERNS.slice(1).map((p) => row(p.id, p.name, p.pattern))}
+
       </View>
 
       <View style={{ flex: 1, gap: spacing.lg, minWidth: 0 }}>
@@ -134,11 +142,7 @@ export function StrumView({ s }: { s: SongPractice }) {
 
         <Card style={styles.stage}>
           <StrumGlyphs pattern={s.strumPattern} size={isPhone ? 44 : 112} active={slot} />
-          <View style={styles.legend}>
-            <Legend icon="arrow-down" color={colors.accent} text="Downstroke · thick, amber" />
-            <Legend icon="arrow-up" color={colors.text} text="Upstroke · lighter, ivory" />
-            <Legend icon="remove" color={colors.textSubtle} text="Miss — keep the hand moving" />
-          </View>
+          <StrumKey />
         </Card>
 
         <View style={styles.controls}>

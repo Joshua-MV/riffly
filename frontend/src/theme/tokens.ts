@@ -138,7 +138,7 @@ export const fonts = {
   body: 'Geist_400Regular',
   bodyMedium: 'Geist_500Medium',
   bodySemibold: 'Geist_600SemiBold',
-  /** Newsreader: display titles and lyrics. */
+  /** Newsreader: display titles. */
   serif: 'Newsreader_400Regular',
   serifItalic: 'Newsreader_400Regular_Italic',
   /** Geist Mono: engraved labels and readouts. */
@@ -165,8 +165,6 @@ export const typeScale = {
   readout: { fontFamily: fonts.mono, fontSize: 28, lineHeight: 32, letterSpacing: -0.5, fontVariant: ['tabular-nums'] as 'tabular-nums'[] },
   /** Chord · Geist 600 120/0.9 */
   chord: { fontFamily: fonts.display, fontSize: 120, lineHeight: 112, letterSpacing: -4 },
-  /** Lyric · Newsreader 30/1.45 */
-  lyric: { fontFamily: fonts.serif, fontSize: 30, lineHeight: 44 },
 } as const;
 
 export type TypeVariant = keyof typeof typeScale;

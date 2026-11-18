@@ -1,12 +1,26 @@
 /** Derives what the player should see from a song + its practice settings (pure, tested). */
 
 import { practiceOf, type LocalSong, type PracticeSettings } from '@/features/library/model';
-import { buildFingerstyleTab, PATTERNS, type TabBar } from '@/lib/music/fingerstyle';
+import { buildFingerstyleTab, chooseBarOffset, PATTERNS, type TabBar } from '@/lib/music/fingerstyle';
 import { tuningById, tuningStrings, uniformShift, type Tuning } from '@/lib/music/instruments';
 import { getVoicings, STANDARD_OPEN_MIDI } from '@/lib/music/voicings';
 import { parseChord } from '@/lib/music/chords';
 
 import { buildTimeline, type TimelineChord } from './timeline';
+
+/**
+ * Which beat (0-3) of the extended beat grid starts bar 1. One answer for the whole app (strum
+ * row, beat lamps, bar numbers, metronome accent, tab), taken from the engine when it found the
+ * bar start, so nothing can be a beat out of step with anything else.
+ */
+export function songBarOffset(analysis: LocalSong['analysis'], beats: readonly number[]): number {
+  const raw = analysis.beats;
+  if (analysis.strum && raw.length) {
+    const k = beats.findIndex((b) => Math.abs(b - raw[0]) < 0.002);
+    if (k >= 0) return (((analysis.strum.downbeat + k) % 4) + 4) % 4;
+  }
+  return chooseBarOffset(beats, analysis.chords.filter((c) => c.label !== 'N').map((c) => c.start));
+}
 
 export interface PlayContext {
   tuning: Tuning;
@@ -40,18 +54,49 @@ export function playContext(settings: PracticeSettings): PlayContext {
   };
 }
 
-/** Timeline whose `display` is the chord *shape* to play (corrections, key change, tuning, capo). */
-export function practiceTimeline(song: LocalSong, settings: PracticeSettings = practiceOf(song)): TimelineChord[] {
-  return buildTimeline(song.analysis.chords, song.corrections, playContext(settings).displayOffset);
+/**
+ * The beginner version of a chord: plain major or minor (Cadd9 → C, G/B → G, Em7 → Em,
+ * Dsus4 → D, E5 → E). Anything that isn't a chord symbol is returned unchanged.
+ */
+export function simpleChord(label: string): string {
+  const sym = parseChord(label);
+  if (!sym) return label;
+  const minor = sym.quality === 'min' || sym.quality === 'm7' || sym.quality === 'dim';
+  const root = label.match(/^[A-G][#b]?/)?.[0] ?? label;
+  return minor ? `${root}m` : root;
 }
 
-export function practiceTab(timeline: readonly TimelineChord[], beats: readonly number[], patternId: string, shapeMidi?: readonly number[]): TabBar[] {
+/**
+ * Chords as a beginner plays them: simple names (unless the user corrected a chord: their
+ * label is kept), and neighbouring blocks with the same chord joined into one.
+ */
+export function beginnerTimeline(chords: LocalSong['analysis']['chords'], corrections: LocalSong['corrections'], offset: number): TimelineChord[] {
+  const out: TimelineChord[] = [];
+  for (const c of buildTimeline(chords, corrections, offset)) {
+    const display = c.label === 'N' || c.corrected ? c.display : simpleChord(c.display);
+    const prev = out[out.length - 1];
+    if (prev && prev.display === display && prev.label !== 'N' && c.label !== 'N' && !c.corrected && !prev.corrected) {
+      prev.end = c.end;
+      continue;
+    }
+    out.push({ ...c, display });
+  }
+  return out;
+}
+
+/** Timeline whose `display` is the chord *shape* to play (corrections, key change, tuning, capo). */
+export function practiceTimeline(song: LocalSong, settings: PracticeSettings = practiceOf(song)): TimelineChord[] {
+  return beginnerTimeline(song.analysis.chords, song.corrections, playContext(settings).displayOffset);
+}
+
+export function practiceTab(timeline: readonly TimelineChord[], beats: readonly number[], patternId: string, shapeMidi?: readonly number[], barOffset?: number): TabBar[] {
   const pattern = PATTERNS.find((p) => p.id === patternId) ?? PATTERNS[0];
   return buildFingerstyleTab(
     timeline.map((c) => ({ start: c.start, end: c.end, shape: c.label === 'N' ? 'N' : c.display })),
     beats,
     pattern,
     shapeMidi,
+    barOffset,
   );
 }
 

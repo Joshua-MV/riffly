@@ -11,14 +11,15 @@ import { Platform } from 'react-native';
 import type { LocalSong } from '@/features/library/model';
 import { storage } from '@/features/library/storage';
 import { loopTarget } from '@/features/songs/timeline';
-import { chooseBarOffset, extendBeats } from '@/lib/music/fingerstyle';
+import { songBarOffset } from '@/features/songs/practice';
+import { extendBeats } from '@/lib/music/fingerstyle';
 import { barDuration, renderClicks } from '@/lib/audio/click';
 import { createClickScheduler } from '@/lib/audio/metronome';
 import type { ClickScheduler } from '@/lib/audio/metronome.types';
 import { encodeWav } from '@/lib/audio/pluck';
 import { wavUri } from '@/lib/audio/wavUri';
 
-import { getSettings } from '@/features/settings/store';
+import { getSettings, useSettings } from '@/features/settings/store';
 
 import { createClock, type PlaybackClock } from './clock';
 
@@ -75,6 +76,17 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   const [metronome, setMetronome] = useState(false);
   const clicker = useRef<ClickScheduler | null>(null);
 
+  // The player's exact position, read live (on Windows it is only *reported* ~4 times a second).
+  useEffect(() => {
+    clock.setSource(() => player.currentTime);
+    return () => clock.setSource(null);
+  }, [clock, player]);
+
+  // One delay for the beat lamp, strum highlight and metronome: they all read this clock, so
+  // they can never drift apart from each other.
+  const { syncDelayMs } = useSettings();
+  useEffect(() => clock.setDelay(syncDelayMs / 1000), [clock, syncDelayMs]);
+
   // Feed every position report to the smooth clock.
   useEffect(() => {
     clock.report(status.currentTime, status.playing, rate);
@@ -85,8 +97,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   const grid = useMemo(() => {
     if (!song) return { beats: [] as number[], offset: 0 };
     const beats = extendBeats(song.analysis.beats);
-    const starts = song.analysis.chords.filter((c) => c.label !== 'N').map((c) => c.start);
-    return { beats, offset: chooseBarOffset(beats, starts) };
+    return { beats, offset: songBarOffset(song.analysis, beats) };
   }, [song]);
   useEffect(() => {
     if (!metronome || !status.playing || !grid.beats.length) return;

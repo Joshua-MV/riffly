@@ -4,7 +4,6 @@
  * (IndexedDB) and native (file system) storage backends.
  */
 
-import type { Lyrics } from '@/lib/music/lyrics';
 import type { MidiNote } from '@/lib/music/placement';
 import type { AnalysisResult } from '@/services/api';
 
@@ -30,8 +29,6 @@ export interface PracticeSettings {
   strum?: string;
   /** Show strum arrows in the chord lane. */
   showStrum?: boolean;
-  /** Lyrics timing nudge in ms: positive lights each line up earlier (for words that lag). */
-  lyricsOffsetMs?: number;
 }
 
 export const DEFAULT_PRACTICE: PracticeSettings = { capo: 0, keyShift: 0, pattern: 'arpeggio', countIn: false, tuning: 'standard' };
@@ -54,8 +51,6 @@ export interface LocalSong {
   practice?: PracticeSettings;
   /** Experimental note transcription, if the user requested one. */
   transcription?: TranscriptionResult;
-  /** Lyrics the user pasted or imported (never downloaded), optionally timed per line. */
-  lyrics?: Lyrics;
 }
 
 /** Experimental transcription: detected notes (sounding pitch). Fret placement happens in the app. */
@@ -67,7 +62,7 @@ export interface TranscriptionResult {
   created_at: string;
 }
 
-export type SongPatch = Partial<Pick<LocalSong, 'title' | 'artist' | 'notes' | 'isFavourite' | 'practice' | 'transcription' | 'lyrics'>>;
+export type SongPatch = Partial<Pick<LocalSong, 'title' | 'artist' | 'notes' | 'isFavourite' | 'practice' | 'transcription'>>;
 
 export const practiceOf = (song: LocalSong): PracticeSettings => ({ ...DEFAULT_PRACTICE, ...song.practice });
 

@@ -20,6 +20,8 @@ npm run dev
 
 In Windows PowerShell, type `npm.cmd run dev` if plain `npm` says "running scripts is disabled".
 
+To open Riffly like any other app, run `npm.cmd run shortcut` once: it adds **Riffly** to the Start menu, so Windows search finds it. Opening it rebuilds the app first whenever the code has changed, so it always runs the latest version.
+
 **Riffly opens in its own window.** The first time, it builds the app, which takes a few
 minutes; after that it opens in about a second. Close the window to quit, and you can close the
 terminal too.
@@ -36,6 +38,7 @@ Then run `frontend\src-tauri\target\release\bundle\nsis\Riffly_0.1.0_x64-setup.e
 | Command | What it does |
 |---|---|
 | `npm run dev` (or `npm start`) | Open the Riffly app; rebuilds it only when its code has changed |
+| `npm run shortcut` | Add Riffly to the Start menu (opens the latest version, rebuilding when needed) |
 | `npm run build` | Build the Windows installers (.exe and .msi) |
 | `npm run dev:live` | For editing Riffly's code: the app with live reload (uses about 1 GB of RAM while editing) |
 | `npm run transcribe-server` | Optional: the Python server for the experimental "Transcribe" tab |
@@ -74,7 +77,6 @@ you move around the app, and a mini player shows the current chord on every scre
 |---|---|
 | **Chord lane** | Chord blocks scroll under a playhead. Each block's width is how long to hold the chord, with beat ticks inside. The current chord fills up and shows "3 beats left", and the next chord sits right beside it. Key, tempo, capo and length are shown underneath. Tap a block to jump there. |
 | **Player** | Spotify-style: drag the seek bar anywhere (backwards or forwards), a big play/pause button, ⏮ ⏭ to jump between chord changes (⏮ restarts the current chord first), loop, speed (pitch kept) and count-in. |
-| **Lyrics** | Paste the song's words (or import a .txt or synced .lrc file); chords appear above the words and the sheet auto-scrolls with the song, following capo and key settings. Tap **Sync** and tap along once (or press Space) to time each line. Riffly never downloads lyrics, because they're copyrighted. |
 | **Make it easier** | Tries every capo position and suggests the one with the easiest shapes, e.g. Ab–Eb–Fm–Db becomes *capo 1: G–D–Em–C, no barre chords*. The recording stays in its real key, so you can still play along. |
 | **Chords** | A timeline synced to playback, with the current and next chords plus a diagram, a loop for the current phrase, speeds of 0.5–1× that keep the pitch, and corrections. |
 | **Fingerpicking tab** | Generated from the song's chords and beat in three patterns (simple arpeggio, pinch, Travis). It scrolls in sync and highlights the note to play now. It is an *arrangement* in the song's style, not a note-for-note copy. |
@@ -140,6 +142,7 @@ frontend/                the app's screens and logic (React Native / Expo, TypeS
 frontend/src-tauri/      Windows app shell (Tauri, Rust): engine bridge, MP3 encoding (LAME), SQLite
 frontend/src/features/   library/ (SQLite storage + importer), songs/, player/, practice/, tuner/
 frontend/src/lib/        pure, tested logic: music theory, voicings, YIN, tabs, capo helper
+brand/                   brand kit: logo files, colours (JSON + CSS), type; see brand/README.md
 backend/                 optional Python server (experimental transcription)
 scripts/dev.mjs          the `npm run …` commands
 docs/                    PLAN.md, AUDIO_ENGINE.md

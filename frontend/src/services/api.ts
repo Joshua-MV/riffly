@@ -35,6 +35,10 @@ export interface AnalysisResult {
 export interface StrumAnalysis {
   /** Eight eighth notes of a 4/4 bar: D down, U up, - rest. */
   pattern: string;
+  /** Which common pattern suits the song ("folk", "ballad", "drive", "downs"). */
+  pattern_id?: string;
+  /** How often the in-between eighths are struck compared with the beats. */
+  busyness?: number;
   /** Beat index (mod 4) that starts a bar, in the engine's own beat list. */
   downbeat: number;
   sixteenth_feel: boolean;

@@ -10,6 +10,7 @@ import { useState } from 'react';
 import { View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
+import { LaunchSplash } from '@/components/layout/LaunchSplash';
 import { Shell } from '@/components/layout/Shell';
 import { PlayerProvider } from '@/features/player/PlayerProvider';
 import { ThemeProvider, useTheme } from '@/theme/ThemeProvider';
@@ -28,6 +29,7 @@ function AppStack() {
           }}
         />
       </Shell>
+      <LaunchSplash />
     </View>
   );
 }

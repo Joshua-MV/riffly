@@ -6,7 +6,8 @@ import { ArtTile } from '@/components/music/ArtTile';
 import { Waveform } from '@/components/music/Waveform';
 import { Button } from '@/components/ui/Button';
 import { Icon } from '@/components/ui/Icon';
-import { Card, Notice, SegmentedControl } from '@/components/ui/primitives';
+import { Card, Notice, Stepper } from '@/components/ui/primitives';
+import { strumChoice } from '@/lib/music/strum';
 import type { PressState } from '@/components/ui/pressState';
 import { Text } from '@/components/ui/Text';
 import { transposeLabel } from '@/lib/music/chords';
@@ -17,18 +18,19 @@ import { fonts, radius, spacing } from '@/theme/tokens';
 
 import { CapoCard } from '../components/CapoCard';
 import { ChordList, CorrectionEditor } from '../components/ChordList';
-import { songChords } from '../practice';
+import { simpleChord, songChords } from '../practice';
 import { formatBytes, formatTime, type TimelineChord } from '../timeline';
 import type { SongPractice } from '../useSongPractice';
 
 import { StrumGlyphs } from './StrumGlyphs';
+import { StrumPicker } from './StrumPicker';
 
 /** Song overview: what Riffly found, at a glance, and where to start. */
 export function Overview({ s }: { s: SongPractice }) {
   const { colors } = useTheme();
   const { isPhone } = useLayout();
   const { song, result, practice, ctx } = s;
-  const [shapes, setShapes] = useState<'shapes' | 'concert'>('shapes');
+  const shapes = 'shapes' as 'shapes' | 'concert';
   const [correcting, setCorrecting] = useState(false);
   const [editing, setEditing] = useState<TimelineChord | null>(null);
 
@@ -36,7 +38,7 @@ export function Overview({ s }: { s: SongPractice }) {
   const meanConf = real.length ? real.reduce((n, c) => n + c.confidence, 0) / real.length : 0;
   const doubtful = s.timeline.filter((c) => c.label !== 'N' && c.confidence < 0.35).length;
   const offset = shapes === 'shapes' ? ctx.displayOffset : practice.keyShift;
-  const progression = result.progression.map((c) => transposeLabel(c, offset));
+  const progression = result.progression.map((c) => simpleChord(transposeLabel(c, offset)));
   const distinct = useMemo(() => songChords(s.timeline, ctx.shapeMidi), [s.timeline, ctx.shapeMidi]);
   const tuning = tuningById(practice.tuning);
   const steps = [
@@ -45,7 +47,6 @@ export function Overview({ s }: { s: SongPractice }) {
     { label: 'Beats', ok: result.beats.length > 0 },
     { label: 'Chords', ok: real.length > 0 },
     { label: 'Strumming', ok: !!result.strum },
-    { label: 'Lyrics', ok: !!song.lyrics },
   ];
   const startPlaying = () => {
     router.setParams({ view: 'play' });
@@ -99,11 +100,13 @@ export function Overview({ s }: { s: SongPractice }) {
         <Card style={[styles.panel, { flex: 1.4 }]}>
           <View style={styles.sectionHead}>
             <Text variant="heading">Chord progression</Text>
-            <SegmentedControl<'shapes' | 'concert'>
-              label="Chord names"
-              value={shapes}
-              onChange={setShapes}
-              options={[{ value: 'shapes', label: practice.capo ? `Shapes · capo ${practice.capo}` : 'Shapes' }, { value: 'concert', label: 'Concert pitch' }]}
+            <Stepper
+              label="capo"
+              value={practice.capo ? `Capo ${practice.capo}` : 'No capo'}
+              onMinus={() => s.setPractice({ capo: Math.max(0, practice.capo - 1) })}
+              onPlus={() => s.setPractice({ capo: Math.min(9, practice.capo + 1) })}
+              minusDisabled={practice.capo === 0}
+              plusDisabled={practice.capo >= 9}
             />
           </View>
           {progression.length > 0 && (
@@ -134,11 +137,14 @@ export function Overview({ s }: { s: SongPractice }) {
         <Card style={[styles.panel, { flex: 1 }]}>
           <View style={styles.sectionHead}>
             <Text variant="heading">Strumming</Text>
-            {result.strum && <Text variant="overline" tone="subtle">Detected · {Math.round(result.strum.confidence * 100)}%</Text>}
+            <Text variant="overline" tone="subtle">{strumChoice(practice.strum, result.strum) === 'auto' ? 'Suits this song' : 'Your choice'}</Text>
           </View>
           <StrumGlyphs pattern={s.strumPattern} size={26} />
+          <StrumPicker choice={practice.strum} detected={result.strum} onChoose={(id) => s.setPractice({ strum: id })} />
           <Text variant="caption" tone="muted">
-            {result.strum ? 'The rhythm Riffly heard in this recording. Pick another in Strum if it doesn’t feel right.' : 'Not detected for this song; showing the common folk-pop pattern.'}
+            {strumChoice(practice.strum, result.strum) === 'auto'
+              ? 'Riffly picked this from how busy the strumming in the recording is and its tempo. Tap another pattern to switch.'
+              : 'Tap a pattern to switch. “This song” is the one Riffly picked for this recording.'}
           </Text>
           <View style={{ gap: spacing.xs }}>
             <Text variant="overline" tone="subtle">Pipeline</Text>
@@ -235,4 +241,5 @@ const styles = StyleSheet.create({
   chordBox: { minWidth: 56, height: 48, paddingHorizontal: spacing.md, borderRadius: radius.md, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
   small: { height: 44, minWidth: 48 },
   chordText: { fontFamily: fonts.display, fontSize: 20, lineHeight: 24 },
+  capoTag: { paddingHorizontal: spacing.sm, height: 24, borderRadius: radius.xs, borderWidth: 1, justifyContent: 'center' },
 });
