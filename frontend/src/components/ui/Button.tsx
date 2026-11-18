@@ -1,6 +1,6 @@
 import type { PressState } from '@/components/ui/pressState';
-import { Ionicons } from '@expo/vector-icons';
-import type { ComponentProps, ReactNode } from 'react';
+import { Icon } from '@/components/ui/Icon';
+import type { ReactNode } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 
 import { useTheme } from '@/theme/ThemeProvider';
@@ -8,7 +8,8 @@ import { radius, spacing, typeScale } from '@/theme/tokens';
 
 import { Text } from './Text';
 
-export type IconName = ComponentProps<typeof Ionicons>['name'];
+export type { IconName } from './Icon';
+import type { IconName } from './Icon';
 type Variant = 'primary' | 'secondary' | 'ghost' | 'danger';
 type Size = 'sm' | 'md' | 'lg';
 
@@ -26,7 +27,8 @@ export interface ButtonProps {
   style?: StyleProp<ViewStyle>;
 }
 
-const heights: Record<Size, number> = { sm: 36, md: 44, lg: 56 };
+/** Controls are 28/36/44 px; anything hit while holding a guitar is 44 or more. */
+const heights: Record<Size, number> = { sm: 30, md: 38, lg: 48 };
 
 export function Button({
   label, onPress, variant = 'primary', size = 'md', icon, iconRight, loading, disabled, fullWidth,
@@ -36,14 +38,14 @@ export function Button({
   const inactive = disabled || loading;
   const bg: Record<Variant, string> = {
     primary: colors.accent,
-    secondary: colors.surfaceHover,
+    secondary: colors.surface,
     ghost: 'transparent',
-    danger: colors.dangerSoft,
+    danger: 'transparent',
   };
   const fg: Record<Variant, string> = {
     primary: colors.onAccent,
     secondary: colors.text,
-    ghost: colors.accent,
+    ghost: colors.textMuted,
     danger: colors.danger,
   };
   const color = inactive ? colors.onDisabled : fg[variant];
@@ -59,14 +61,15 @@ export function Button({
         styles.base,
         {
           height: heights[size],
-          paddingHorizontal: size === 'sm' ? spacing.md : spacing.xl,
+          paddingHorizontal: size === 'sm' ? spacing.md : size === 'lg' ? spacing.xl : spacing.lg,
           backgroundColor: inactive && variant !== 'ghost' ? colors.disabled : bg[variant],
-          borderColor: variant === 'secondary' ? colors.border : 'transparent',
-          opacity: pressed ? 0.85 : 1,
-          transform: [{ scale: pressed ? 0.98 : 1 }],
+          borderColor: variant === 'secondary' ? colors.border : variant === 'danger' ? colors.dangerSoft : 'transparent',
+          opacity: pressed ? 0.88 : 1,
         },
         hovered && !inactive && variant === 'primary' && { backgroundColor: colors.accentPressed },
-        hovered && !inactive && variant !== 'primary' && { backgroundColor: colors.accentSoft },
+        hovered && !inactive && variant === 'secondary' && { backgroundColor: colors.surfaceHover, borderColor: colors.borderStrong },
+        hovered && !inactive && variant === 'ghost' && { backgroundColor: colors.surfaceHover },
+        hovered && !inactive && variant === 'danger' && { backgroundColor: colors.dangerSoft },
         fullWidth && styles.full,
         style,
       ]}
@@ -75,9 +78,9 @@ export function Button({
         <ActivityIndicator color={color} size="small" />
       ) : (
         <View style={styles.row}>
-          {icon && <Ionicons name={icon} size={size === 'lg' ? 22 : 18} color={color} />}
-          <Text style={[size === 'lg' ? typeScale.subheading : typeScale.bodyStrong, { color }]}>{label}</Text>
-          {iconRight && <Ionicons name={iconRight} size={18} color={color} />}
+          {icon && <Icon name={icon} size={size === 'lg' ? 20 : 16} color={color} />}
+          <Text style={[size === 'sm' ? typeScale.caption : typeScale.bodyStrong, { color, fontFamily: typeScale.bodyStrong.fontFamily }]}>{label}</Text>
+          {iconRight && <Icon name={iconRight} size={16} color={color} />}
         </View>
       )}
     </Pressable>
@@ -111,14 +114,16 @@ export function IconButton({ icon, label, onPress, size = 44, active, disabled, 
         {
           width: size,
           height: size,
-          backgroundColor: filled ? colors.accent : active ? colors.accentSoft : colors.surfaceHover,
+          backgroundColor: filled ? colors.accent : active ? colors.accentSoft : 'transparent',
+          borderWidth: filled ? 0 : 1,
+          borderColor: active ? colors.accent : colors.border,
           opacity: disabled ? 0.4 : pressed ? 0.8 : 1,
         },
       ]}
     >
-      <Ionicons
+      <Icon
         name={icon}
-        size={Math.round(size * 0.46)}
+        size={Math.round(size * 0.44)}
         color={filled ? colors.onAccent : active ? colors.accent : colors.text}
       />
     </Pressable>
@@ -129,5 +134,5 @@ const styles = StyleSheet.create({
   base: { borderRadius: radius.md, alignItems: 'center', justifyContent: 'center', borderWidth: 1 },
   row: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   full: { alignSelf: 'stretch' },
-  icon: { borderRadius: radius.pill, alignItems: 'center', justifyContent: 'center' },
+  icon: { borderRadius: radius.md, alignItems: 'center', justifyContent: 'center' },
 });

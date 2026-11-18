@@ -1,3 +1,4 @@
+import { Fragment } from 'react';
 import Svg, { Circle, Line, Rect, Text as SvgText } from 'react-native-svg';
 
 import type { Voicing } from '@/lib/music/voicings';
@@ -46,19 +47,37 @@ export function ChordDiagram({ voicing, width = 140, showFingers = true, tone = 
       {Array.from({ length: FRETS_SHOWN + 1 }, (_, i) => (
         <Line key={`f${i}`} x1={pad} x2={pad + gridW} y1={top + i * fretH} y2={top + i * fretH} stroke={colors.borderStrong} strokeWidth={1} />
       ))}
-      {Array.from({ length: strings }, (_, s) => (
-        <Line key={`s${s}`} x1={xOf(s)} x2={xOf(s)} y1={top} y2={top + FRETS_SHOWN * fretH} stroke={colors.textSubtle} strokeWidth={1 + (strings - 1 - s) * 0.18} />
-      ))}
-      {/* Open / muted markers */}
-      {voicing.frets.map((f, s) =>
-        f === 0 ? (
-          <Circle key={`o${s}`} cx={xOf(s)} cy={top - width * 0.09} r={width * 0.034} stroke={colors.textMuted} strokeWidth={1.5} fill="none" />
-        ) : f === null ? (
-          <SvgText key={`x${s}`} x={xOf(s)} y={top - width * 0.06} fontSize={width * 0.1} fill={colors.textSubtle} textAnchor="middle" fontFamily={fonts.bodyMedium}>
-            ×
-          </SvgText>
-        ) : null,
-      )}
+      {Array.from({ length: strings }, (_, s) => {
+        const muted = voicing.frets[s] === null;
+        return (
+          <Line
+            key={`s${s}`}
+            x1={xOf(s)}
+            x2={xOf(s)}
+            y1={top}
+            y2={top + FRETS_SHOWN * fretH}
+            stroke={colors.textSubtle}
+            strokeWidth={1 + (strings - 1 - s) * 0.18}
+            strokeDasharray={muted ? `${gap * 0.12} ${gap * 0.12}` : undefined}
+            opacity={muted ? 0.45 : 1}
+          />
+        );
+      })}
+      {/* Open strings: a ring above the nut. Muted strings: a big X right on the string. */}
+      {voicing.frets.map((f, s) => {
+        if (f === 0) return <Circle key={`o${s}`} cx={xOf(s)} cy={top - width * 0.09} r={width * 0.034} stroke={colors.textMuted} strokeWidth={1.5} fill="none" />;
+        if (f !== null) return null;
+        const cx = xOf(s);
+        const cy = top + fretH * 0.5;
+        const r = gap * 0.3;
+        return (
+          <Fragment key={`x${s}`}>
+            <Circle cx={cx} cy={cy} r={r * 1.35} fill={colors.surface} opacity={0.9} />
+            <Line x1={cx - r} y1={cy - r} x2={cx + r} y2={cy + r} stroke={colors.danger} strokeWidth={Math.max(2, gap * 0.12)} strokeLinecap="round" />
+            <Line x1={cx - r} y1={cy + r} x2={cx + r} y2={cy - r} stroke={colors.danger} strokeWidth={Math.max(2, gap * 0.12)} strokeLinecap="round" />
+          </Fragment>
+        );
+      })}
       {voicing.barre && (
         <Rect
           x={xOf(voicing.barre.fromString) - gap * 0.32}

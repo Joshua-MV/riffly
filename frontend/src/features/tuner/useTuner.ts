@@ -17,6 +17,9 @@ export function useTuner(tuning: Tuning, selectedString: number | null, a4 = 440
   const [status, setStatus] = useState<TunerStatus>('idle');
   const [error, setError] = useState<string | null>(null);
   const [reading, setReading] = useState<TunerReading | null>(null);
+  /** Microphone input level in dBFS (about 10 updates a second), or null when stopped. */
+  const [levelDb, setLevelDb] = useState<number | null>(null);
+  const lastLevel = useRef(0);
 
   const strings = useMemo(() => tuningStrings(tuning, a4), [tuning, a4]);
   const engineRef = useRef<{ engine: TunerEngine; sampleRate: number } | null>(null);
@@ -36,6 +39,13 @@ export function useTuner(tuning: Tuning, selectedString: number | null, a4 = 440
         };
       }
       const now = Date.now();
+      if (now - lastLevel.current > 100) {
+        lastLevel.current = now;
+        let sum = 0;
+        for (let i = 0; i < frame.length; i++) sum += frame[i] * frame[i];
+        const rms = Math.sqrt(sum / Math.max(1, frame.length));
+        setLevelDb(rms > 1e-6 ? Math.max(-80, 20 * Math.log10(rms)) : -80);
+      }
       const result = engineRef.current.engine.process(frame, now);
       if (result) {
         lastHeard.current = now;
@@ -74,7 +84,8 @@ export function useTuner(tuning: Tuning, selectedString: number | null, a4 = 440
     mic.stop();
     setStatus('idle');
     setReading(null);
+    setLevelDb(null);
   }, [mic]);
 
-  return { status, error, reading, strings, start, stop };
+  return { status, error, reading, levelDb, strings, start, stop };
 }

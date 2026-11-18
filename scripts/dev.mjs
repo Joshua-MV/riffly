@@ -38,8 +38,21 @@ const fail = (msg) => {
 
 // Rust's cargo lives in ~/.cargo/bin; terminals opened before Rust was installed don't have it.
 const cargoBin = path.join(process.env.USERPROFILE ?? process.env.HOME ?? '', '.cargo', 'bin');
-const PATH = `${cargoBin}${path.delimiter}${process.env.PATH ?? process.env.Path ?? ''}`;
-const toolEnv = { ...process.env, PATH, Path: PATH };
+// The on-device lyrics engine (whisper.cpp) builds with CMake, which ships with the Visual
+// Studio C++ Build Tools but isn't on PATH by default.
+function vsCmakeBin() {
+  if (!isWin) return null;
+  const vswhere = path.join(process.env['ProgramFiles(x86)'] ?? 'C:\\Program Files (x86)', 'Microsoft Visual Studio', 'Installer', 'vswhere.exe');
+  if (!existsSync(vswhere)) return null;
+  const res = spawnSync(vswhere, ['-products', '*', '-requires', 'Microsoft.VisualStudio.Component.VC.Tools.x86.x64', '-property', 'installationPath'], { encoding: 'utf8' });
+  const vs = res.stdout?.trim().split(/\r?\n/)[0];
+  const bin = vs && path.join(vs, 'Common7', 'IDE', 'CommonExtensions', 'Microsoft', 'CMake', 'CMake', 'bin');
+  return bin && existsSync(path.join(bin, 'cmake.exe')) ? bin : null;
+}
+const cmakeBin = vsCmakeBin();
+const PATH = [cargoBin, cmakeBin, process.env.PATH ?? process.env.Path ?? ''].filter(Boolean).join(path.delimiter);
+// Use whisper.cpp's bundled Rust bindings (generating them would need LLVM/clang installed).
+const toolEnv = { ...process.env, PATH, Path: PATH, WHISPER_DONT_GENERATE_BINDINGS: '1' };
 
 /** npm/npx are .cmd files on Windows and must go through a shell (fixed args, no escaping needed). */
 function command(cmd, args) {

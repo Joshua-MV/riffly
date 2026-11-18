@@ -1,11 +1,10 @@
-import { Ionicons } from '@expo/vector-icons';
 import { useQueryClient } from '@tanstack/react-query';
 import * as DocumentPicker from 'expo-document-picker';
 import { useEffect, useRef, useState } from 'react';
-import { Platform, StyleSheet, View } from 'react-native';
+import { Platform, Pressable, StyleSheet, View } from 'react-native';
 
-import { Button } from '@/components/ui/Button';
-import { Notice } from '@/components/ui/primitives';
+import { Icon } from '@/components/ui/Icon';
+import type { PressState } from '@/components/ui/pressState';
 import { Text } from '@/components/ui/Text';
 import { config } from '@/config';
 import { startImport } from '@/features/library/importer';
@@ -19,7 +18,7 @@ import { songKeys } from './hooks';
 const EXTENSIONS = ['.mp3', '.wav', '.m4a'];
 const MAX_BYTES = config.maxUploadMb * 1024 * 1024;
 
-/** Client-side pre-check; the server re-validates by magic bytes. */
+/** Client-side pre-check; the engine re-validates by magic bytes. */
 export function validateFile(name: string, size: number | undefined): string | null {
   const lower = name.toLowerCase();
   if (!EXTENSIONS.some((e) => lower.endsWith(e))) return 'Unsupported format. Choose an MP3, WAV or M4A file.';
@@ -28,18 +27,19 @@ export function validateFile(name: string, size: number | undefined): string | n
   return null;
 }
 
-export function UploadPanel() {
-  const { colors } = useTheme();
+/**
+ * Importing songs: a file picker plus drag-and-drop anywhere in the window (Windows app).
+ * Progress shows in the ImportList.
+ */
+export function useSongImport() {
   const qc = useQueryClient();
   const [error, setError] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
-  const dropRef = useRef<React.ComponentRef<typeof View>>(null);
 
   const start = (source: UploadSource, size?: number) => {
     const invalid = validateFile(source.name, size);
     setError(invalid);
     if (invalid) return;
-    // Progress and an "Open" button appear in the ImportList on this and the My Music screen.
     startImport(source, () => void qc.invalidateQueries({ queryKey: songKeys.all }));
   };
   const startRef = useRef(start);
@@ -49,72 +49,83 @@ export function UploadPanel() {
     const res = await DocumentPicker.getDocumentAsync({
       type: Platform.OS === 'web' ? '.mp3,.wav,.m4a,audio/mpeg,audio/wav,audio/mp4' : ['audio/*'],
       copyToCacheDirectory: true,
+      multiple: Platform.OS === 'web',
     });
-    if (res.canceled || !res.assets?.[0]) return;
-    const a = res.assets[0];
-    if (Platform.OS === 'web' && a.file) start({ kind: 'web', file: a.file, name: a.name }, a.size);
-    else start({ kind: 'native', uri: a.uri, name: a.name, mimeType: a.mimeType ?? 'audio/mpeg' }, a.size);
+    if (res.canceled || !res.assets?.length) return;
+    for (const a of res.assets) {
+      if (Platform.OS === 'web' && a.file) start({ kind: 'web', file: a.file, name: a.name }, a.size);
+      else start({ kind: 'native', uri: a.uri, name: a.name, mimeType: a.mimeType ?? 'audio/mpeg' }, a.size);
+    }
   };
 
-  // Web-only drag and drop, attached to the underlying DOM node.
+  // Drop anywhere in the window.
   useEffect(() => {
-    if (Platform.OS !== 'web') return;
-    const el = dropRef.current as unknown as HTMLElement | null;
-    if (!el?.addEventListener) return;
-    const over = (e: DragEvent) => {
-      e.preventDefault();
+    if (Platform.OS !== 'web' || typeof document === 'undefined') return;
+    let depth = 0;
+    const hasFiles = (e: DragEvent) => !!e.dataTransfer && [...e.dataTransfer.types].includes('Files');
+    const enter = (e: DragEvent) => {
+      if (!hasFiles(e)) return;
+      depth++;
       setDragging(true);
     };
-    const leave = () => setDragging(false);
-    const drop = (e: DragEvent) => {
-      e.preventDefault();
-      setDragging(false);
-      const file = e.dataTransfer?.files?.[0];
-      if (file) startRef.current({ kind: 'web', file, name: file.name }, file.size);
+    const over = (e: DragEvent) => {
+      if (hasFiles(e)) e.preventDefault();
     };
-    el.addEventListener('dragover', over);
-    el.addEventListener('dragleave', leave);
-    el.addEventListener('drop', drop);
+    const leave = () => {
+      depth = Math.max(0, depth - 1);
+      if (depth === 0) setDragging(false);
+    };
+    const drop = (e: DragEvent) => {
+      if (!hasFiles(e)) return;
+      e.preventDefault();
+      depth = 0;
+      setDragging(false);
+      for (const file of [...(e.dataTransfer?.files ?? [])]) startRef.current({ kind: 'web', file, name: file.name }, file.size);
+    };
+    document.addEventListener('dragenter', enter);
+    document.addEventListener('dragover', over);
+    document.addEventListener('dragleave', leave);
+    document.addEventListener('drop', drop);
     return () => {
-      el.removeEventListener('dragover', over);
-      el.removeEventListener('dragleave', leave);
-      el.removeEventListener('drop', drop);
+      document.removeEventListener('dragenter', enter);
+      document.removeEventListener('dragover', over);
+      document.removeEventListener('dragleave', leave);
+      document.removeEventListener('drop', drop);
     };
   }, []);
 
+  return { pick, error, dragging, clearError: () => setError(null) };
+}
+
+/** The slim drop panel on My Songs. */
+export function DropZone({ onPick, dragging }: { onPick: () => void; dragging: boolean }) {
+  const { colors } = useTheme();
   return (
-    <View
-      ref={dropRef}
-      style={[
+    <Pressable
+      role="button"
+      accessibilityLabel="Import audio: drop MP3 or WAV files, or choose files"
+      onPress={onPick}
+      style={({ hovered }: PressState) => [
         styles.zone,
-        { borderColor: dragging ? colors.accent : colors.borderStrong, backgroundColor: dragging ? colors.accentSoft : colors.surface },
+        { borderColor: dragging ? colors.accent : colors.border, backgroundColor: dragging ? colors.accentSoft : hovered ? colors.surfaceHover : colors.surface },
       ]}
     >
-      <View style={[styles.icon, { backgroundColor: colors.accentSoft }]}>
-        <Ionicons name="musical-notes" size={28} color={colors.accent} />
+      <View style={[styles.icon, { backgroundColor: colors.accentSoft, borderColor: colors.accent }]}>
+        <Icon name="download-outline" size={18} color={colors.highlight} />
       </View>
-      <Text variant="heading" align="center">
-        {Platform.OS === 'web' ? 'Drop a song here' : 'Choose a song to analyse'}
-      </Text>
-      <Text tone="muted" align="center">
-        {config.supportedFormats.join(', ')} · up to {config.maxUploadMb} MB · up to 12 minutes
-      </Text>
-      <Button label={Platform.OS === 'web' ? 'Browse files' : 'Choose file'} icon="folder-open" onPress={pick} size="lg" />
-      <Text variant="caption" tone="subtle" align="center">
-        {localEngine.available()
-          ? 'Analysed on this PC by the built-in engine and saved as MP3. Nothing is uploaded.'
-          : "Saved on this device as MP3. The analysis server deletes its copy as soon as it's done."}
-      </Text>
-      {error && (
-        <View style={{ alignSelf: 'stretch' }}>
-          <Notice tone="error">{error}</Notice>
-        </View>
-      )}
-    </View>
+      <View style={{ flex: 1, gap: 2 }}>
+        <Text variant="subheading">{dragging ? 'Drop to import' : Platform.OS === 'web' ? 'Drop MP3 or WAV files anywhere in this window' : 'Choose songs to import'}</Text>
+        <Text variant="caption" tone="muted">
+          {localEngine.available()
+            ? 'Riffly finds the key, tempo, chords, beats and strumming on your computer. Files never leave this machine.'
+            : `${config.supportedFormats.join(', ')} · up to ${config.maxUploadMb} MB · saved on this device as MP3.`}
+        </Text>
+      </View>
+    </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
-  zone: { borderWidth: 1.5, borderStyle: 'dashed', borderRadius: radius.lg, padding: spacing.xxl, alignItems: 'center', gap: spacing.md },
-  icon: { width: 64, height: 64, borderRadius: radius.pill, alignItems: 'center', justifyContent: 'center' },
+  zone: { flexDirection: 'row', alignItems: 'center', gap: spacing.lg, padding: spacing.lg, borderRadius: radius.lg, borderWidth: 1, borderStyle: 'dashed', flex: 1, minWidth: 280 },
+  icon: { width: 44, height: 44, borderRadius: 22, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
 });

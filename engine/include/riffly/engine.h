@@ -29,6 +29,10 @@ int riffly_analyze(const uint8_t* data, size_t size, double max_duration_seconds
 int riffly_decode(const uint8_t* data, size_t size, float** samples_out, size_t* frames_out, int* channels_out,
                   int* sample_rate_out, char** error_out);
 
+/* Decode MP3/WAV bytes to mono float PCM at `target_rate` Hz (e.g. 16000 for speech
+ * recognition). Free *samples_out with riffly_free. */
+int riffly_decode_mono(const uint8_t* data, size_t size, int target_rate, float** samples_out, size_t* frames_out, char** error_out);
+
 /* 1 when the bytes look like an MP3 stream (ID3 tag or MPEG frame sync), else 0. */
 int riffly_is_mp3(const uint8_t* data, size_t size);
 

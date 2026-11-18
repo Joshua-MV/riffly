@@ -1,38 +1,33 @@
 import { Tabs } from 'expo-router';
 import { View } from 'react-native';
 
-import { MiniPlayer } from '@/features/player/MiniPlayer';
-
-import { BottomTabBar, NAV_ITEMS, Sidebar } from '@/components/layout/Navigation';
+import { BottomTabBar, NAV_ITEMS } from '@/components/layout/Navigation';
+import { Transport } from '@/features/player/Transport';
 import { useTheme } from '@/theme/ThemeProvider';
+import { breakpoints } from '@/theme/tokens';
 import { useLayout } from '@/theme/useLayout';
 
 /**
- * Phones get a bottom tab bar; desktop-width windows get a persistent sidebar with a wider
- * content area. Same routes, same state — only the chrome changes.
+ * Wide windows: the rail and transport live in the app shell, so the tab bar is hidden.
+ * Phones: a five-tab bottom bar with the transport floating above it.
  */
 export default function TabsLayout() {
   const { colors } = useTheme();
-  const { isDesktop } = useLayout();
+  const { width } = useLayout();
+  const wide = width >= breakpoints.desktop;
   return (
     <Tabs
-      screenOptions={{
-        headerShown: false,
-        tabBarPosition: isDesktop ? 'left' : 'bottom',
-        sceneStyle: { backgroundColor: colors.background },
-        animation: 'fade',
-      }}
+      screenOptions={{ headerShown: false, sceneStyle: { backgroundColor: colors.background }, animation: 'fade' }}
       tabBar={({ state, navigateToTab }) => {
+        if (wide) return null;
         const activeName = state.routes[state.index]?.name ?? 'index';
         const onNavigate = (name: string) => {
           const route = state.routes.find((r) => r.name === name);
           if (route) navigateToTab(route.key);
         };
-        return isDesktop ? (
-          <Sidebar activeName={activeName} onNavigate={onNavigate} footer={<MiniPlayer variant="sidebar" />} />
-        ) : (
+        return (
           <View>
-            <MiniPlayer />
+            <Transport />
             <BottomTabBar activeName={activeName} onNavigate={onNavigate} />
           </View>
         );
@@ -41,6 +36,8 @@ export default function TabsLayout() {
       {NAV_ITEMS.map((item) => (
         <Tabs.Screen key={item.name} name={item.name} options={{ title: item.label }} />
       ))}
+      <Tabs.Screen name="home" options={{ title: 'Home' }} />
+      <Tabs.Screen name="analyze" options={{ title: 'Import' }} />
     </Tabs>
   );
 }

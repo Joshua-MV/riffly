@@ -24,9 +24,17 @@ export interface PracticeSettings {
   /** Fingerpicking pattern id. */
   pattern: string;
   countIn: boolean;
+  /** Guitar tuning id you play in ('standard' by default; or the song's original tuning). */
+  tuning: string;
+  /** Strum pattern: 'auto' (detected), a preset id, or a pattern string like "D-DU-UDU". */
+  strum?: string;
+  /** Show strum arrows in the chord lane. */
+  showStrum?: boolean;
+  /** Lyrics timing nudge in ms: positive lights each line up earlier (for words that lag). */
+  lyricsOffsetMs?: number;
 }
 
-export const DEFAULT_PRACTICE: PracticeSettings = { capo: 0, keyShift: 0, pattern: 'arpeggio', countIn: false };
+export const DEFAULT_PRACTICE: PracticeSettings = { capo: 0, keyShift: 0, pattern: 'arpeggio', countIn: false, tuning: 'standard' };
 
 export interface LocalSong {
   /** Format version, so stored records can be migrated later. */

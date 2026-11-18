@@ -53,11 +53,11 @@ function useTranscribe(song: LocalSong) {
   return { ...mutation, phase };
 }
 
-export function TranscribePanel({ song, capo, grid, current, onSeek }: { song: LocalSong; capo: number; grid: readonly TabBar[]; current: { bar: number; step: number } | null; onSeek: (t: number) => void }) {
+export function TranscribePanel({ song, capo, soundMidi, grid, current, onSeek }: { song: LocalSong; capo: number; soundMidi?: readonly number[]; grid: readonly TabBar[]; current: { bar: number; step: number } | null; onSeek: (t: number) => void }) {
   const health = useQuery({ queryKey: ['health'], queryFn: api.health, retry: false, staleTime: 60_000 });
   const run = useTranscribe(song);
   const t = song.transcription;
-  const placed = useMemo(() => (t ? placeNotes(t.notes, capo) : []), [t, capo]);
+  const placed = useMemo(() => (t ? placeNotes(t.notes, capo, 0.25, soundMidi) : []), [t, capo, soundMidi]);
   const bars = useMemo(() => (t ? notesToBars(placed, grid) : []), [t, placed, grid]);
   const dropped = t ? t.notes.length - placed.length : 0;
   const unavailable = health.data && health.data.transcription_available === false;

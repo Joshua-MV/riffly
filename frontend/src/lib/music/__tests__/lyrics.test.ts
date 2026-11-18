@@ -1,4 +1,4 @@
-import { chordRowText, estimateTimes, isTimed, layoutChordLine, layoutSong, lineAt, lyricsToText, parseLyrics } from '../lyrics';
+import { chordRowText, estimateTimes, isTimed, layoutChordLine, layoutSong, lineAt, lyricsToText, parseLyrics, segmentsToLyrics, lineSegments } from '../lyrics';
 
 const chords = [
   { start: 0, end: 4, label: 'G' },
@@ -82,5 +82,42 @@ describe('chords over words', () => {
     expect(out[0].marks.map((m) => m.label)).toEqual(['G', 'D']);
     expect(out[1].marks.map((m) => m.label)).toEqual(['Em', 'C']);
     expect(out[1].end).toBe(18);
+  });
+});
+
+describe('heard lyrics', () => {
+  it('splits long segments into lines with proportional times', () => {
+    const l = segmentsToLyrics([
+      { start: 10, end: 14, text: ' Lady, running down to the riptide, taken away to the dark side ' },
+      { start: 15, end: 16, text: 'Short line' },
+      { start: 17, end: 18, text: '   ' },
+    ]);
+    expect(l.source).toBe('heard');
+    expect(l.lines.map((x) => x.text)).toEqual(['Lady,', 'running down to the riptide,', 'taken away to the dark side', 'Short line']);
+    expect(l.lines[0].time).toBe(10);
+    expect(l.lines[1].time!).toBeGreaterThan(10);
+    expect(l.lines[2].time!).toBeLessThan(14);
+    expect(l.lines[3].time).toBe(15);
+  });
+
+  it('splits a long unpunctuated line near the middle', () => {
+    const l = segmentsToLyrics([{ start: 0, end: 6, text: 'I just wanna I just wanna know if you are gonna stay with me tonight or not' }]);
+    expect(l.lines.length).toBe(2);
+    expect(l.lines.every((x) => x.text.length <= 48)).toBe(true);
+  });
+});
+
+describe('line segments for proportional fonts', () => {
+  it('puts each chord over the start of the word it changes on', () => {
+    const segs = lineSegments({ text: 'Hold on, hold on', start: 0, end: 4, marks: [{ col: 0, label: 'C', start: 0 }, { col: 11, label: 'G', start: 2 }] });
+    expect(segs).toEqual([
+      { chord: 'C', start: 0, text: 'Hold on, ' },
+      { chord: 'G', start: 2, text: 'hold on' },
+    ]);
+  });
+
+  it('keeps text before the first chord and chords that land on the same word', () => {
+    const segs = lineSegments({ text: 'and the tide', start: 0, end: 4, marks: [{ col: 5, label: 'D', start: 1 }, { col: 6, label: 'Em', start: 2 }] });
+    expect(segs.map((x) => [x.chord, x.text])).toEqual([[null, 'and '], ['D', ''], ['Em', 'the tide']]);
   });
 });

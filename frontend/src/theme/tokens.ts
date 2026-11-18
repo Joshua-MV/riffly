@@ -1,58 +1,60 @@
 /**
- * Riffly design tokens. Brand palette:
- *   ink #171827 · violet #9B7BFF · amber #FFB84D · mint #48D6B0 · coral #FF6D83 · lilac #F3F0FF
- * Components read semantic tokens (surface, textMuted, accent…) — never raw hex values.
+ * Riffly design tokens: "The Practice Room".
+ *
+ * Materials from the amp corner of a rehearsal room: charcoal tolex, ivory piping, olive and
+ * terracotta grille cloth, and one amber pilot lamp that marks what is live right now.
+ *   Studio Charcoal #252622 · Warm Ivory #F2EEE4 · Vintage Amber #C58A45
+ *   Muted Olive #65745B · Terracotta #A65D48 · Stone Grey #77766F
+ * Rules: amber means "now" (current chord, beat, active string, primary action) and is never
+ * decoration; depth comes from tone steps, not shadows; labels are engraved (mono small caps).
+ * Components read semantic tokens (surface, textMuted, accent…), never raw hex values.
  */
 
-export const palette = {
-  ink950: '#0F1019',
-  ink900: '#171827',
-  ink850: '#1D1F31',
-  ink800: '#24263B',
-  ink700: '#30334C',
-  ink600: '#454865',
-  ink400: '#7C7F9C',
-  ink300: '#A3A5BE',
-  ink100: '#E4E3F0',
-  lilac50: '#FBFAFF',
-  lilac100: '#F3F0FF',
-  lilac200: '#E7E1FF',
-  violet300: '#BBA6FF',
-  violet400: '#9B7BFF',
-  violet500: '#8361F5',
-  violet700: '#5B3FC4',
-  amber400: '#FFB84D',
-  amber600: '#C9831A',
-  mint400: '#48D6B0',
-  mint600: '#1F9E7D',
-  coral400: '#FF6D83',
-  coral600: '#D9425A',
-  white: '#FFFFFF',
+export const brand = {
+  charcoal: '#252622',
+  ivory: '#F2EEE4',
+  amber: '#C58A45',
+  olive: '#65745B',
+  terracotta: '#A65D48',
+  stone: '#77766F',
 } as const;
 
 export interface ColorTokens {
+  /** bg/canvas: the stage behind panels. */
   background: string;
+  /** bg/window: rail, transport, title bar. */
   backgroundRaised: string;
+  /** surface/panel */
   surface: string;
+  /** surface/raised: hover, selected rows, inputs. */
   surfaceHover: string;
+  /** Wells: lanes, tracks, recessed areas. */
   surfaceSunken: string;
   border: string;
   borderStrong: string;
+  divider: string;
   text: string;
   textMuted: string;
   textSubtle: string;
+  textDisabled: string;
   textInverse: string;
+  /** Vintage amber: primary action, active selection. */
   accent: string;
   accentPressed: string;
   accentSoft: string;
   onAccent: string;
+  /** Amber as text: "now" (current chord, beat, live readouts). */
   highlight: string;
   highlightSoft: string;
+  /** Olive: in tune, analysis complete. */
   success: string;
   successSoft: string;
+  /** Terracotta: off pitch, errors, muted strings. */
   danger: string;
   dangerSoft: string;
+  /** Brass: low confidence, weak signal. */
   warning: string;
+  warningSoft: string;
   disabled: string;
   onDisabled: string;
   focusRing: string;
@@ -60,97 +62,138 @@ export interface ColorTokens {
 }
 
 export const darkColors: ColorTokens = {
-  background: palette.ink900,
-  backgroundRaised: palette.ink950,
-  surface: palette.ink850,
-  surfaceHover: palette.ink800,
-  surfaceSunken: palette.ink950,
-  border: palette.ink700,
-  borderStrong: palette.ink600,
-  text: palette.lilac100,
-  textMuted: palette.ink300,
-  textSubtle: palette.ink400,
-  textInverse: palette.ink900,
-  accent: palette.violet400,
-  accentPressed: palette.violet500,
-  accentSoft: 'rgba(155,123,255,0.16)',
-  onAccent: palette.ink950,
-  highlight: palette.amber400,
-  highlightSoft: 'rgba(255,184,77,0.14)',
-  success: palette.mint400,
-  successSoft: 'rgba(72,214,176,0.14)',
-  danger: palette.coral400,
-  dangerSoft: 'rgba(255,109,131,0.14)',
-  warning: palette.amber400,
-  disabled: palette.ink700,
-  onDisabled: palette.ink400,
-  focusRing: palette.violet300,
-  scrim: 'rgba(15,16,25,0.7)',
+  background: '#252622',
+  backgroundRaised: '#1E1F1B',
+  surface: '#2E2F2A',
+  surfaceHover: '#373832',
+  surfaceSunken: '#1E1F1B',
+  border: '#3E3F39',
+  borderStrong: '#4C4D46',
+  divider: '#32332E',
+  text: '#F2EEE4',
+  textMuted: '#B3B0A6',
+  textSubtle: '#9C9A91',
+  textDisabled: '#5E5D57',
+  textInverse: '#252622',
+  accent: '#C58A45',
+  accentPressed: '#D29A57',
+  accentSoft: 'rgba(197,138,69,0.16)',
+  onAccent: '#1E1F1B',
+  highlight: '#D9A15E',
+  highlightSoft: 'rgba(197,138,69,0.14)',
+  success: '#8FA07F',
+  successSoft: 'rgba(101,116,91,0.28)',
+  danger: '#C97A63',
+  dangerSoft: 'rgba(166,93,72,0.22)',
+  warning: '#BFA266',
+  warningSoft: 'rgba(191,162,102,0.16)',
+  disabled: '#373832',
+  onDisabled: '#5E5D57',
+  focusRing: '#D9A15E',
+  scrim: 'rgba(20,21,18,0.72)',
 };
 
 export const lightColors: ColorTokens = {
-  background: palette.lilac50,
-  backgroundRaised: palette.white,
-  surface: palette.white,
-  surfaceHover: palette.lilac100,
-  surfaceSunken: palette.lilac100,
-  border: palette.lilac200,
-  borderStrong: '#CFC6F2',
-  text: palette.ink900,
-  textMuted: palette.ink600,
-  textSubtle: palette.ink400,
-  textInverse: palette.lilac100,
-  accent: palette.violet700,
-  accentPressed: '#4A31A8',
-  accentSoft: 'rgba(91,63,196,0.10)',
-  onAccent: palette.white,
-  highlight: palette.amber600,
-  highlightSoft: 'rgba(255,184,77,0.18)',
-  success: palette.mint600,
-  successSoft: 'rgba(31,158,125,0.12)',
-  danger: palette.coral600,
-  dangerSoft: 'rgba(217,66,90,0.10)',
-  warning: palette.amber600,
-  disabled: palette.lilac200,
-  onDisabled: palette.ink400,
-  focusRing: palette.violet500,
-  scrim: 'rgba(23,24,39,0.45)',
+  background: '#F2EEE4',
+  backgroundRaised: '#E9E4D8',
+  surface: '#FAF8F2',
+  surfaceHover: '#E4DED1',
+  surfaceSunken: '#E9E4D8',
+  border: '#D6CFC0',
+  borderStrong: '#C2B9A7',
+  divider: '#E2DCCF',
+  text: '#252622',
+  textMuted: '#55544E',
+  textSubtle: '#6B6A63',
+  textDisabled: '#A9A69C',
+  textInverse: '#F2EEE4',
+  accent: '#C58A45',
+  accentPressed: '#B57B38',
+  accentSoft: 'rgba(197,138,69,0.18)',
+  onAccent: '#252622',
+  highlight: '#8F5E24',
+  highlightSoft: 'rgba(197,138,69,0.16)',
+  success: '#4E5C45',
+  successSoft: 'rgba(101,116,91,0.18)',
+  danger: '#8E4A37',
+  dangerSoft: 'rgba(166,93,72,0.14)',
+  warning: '#7D6630',
+  warningSoft: 'rgba(191,162,102,0.18)',
+  disabled: '#E4DED1',
+  onDisabled: '#A9A69C',
+  focusRing: '#8F5E24',
+  scrim: 'rgba(37,38,34,0.45)',
 };
 
+/** 4-pt base. */
 export const spacing = { xxs: 2, xs: 4, sm: 8, md: 12, lg: 16, xl: 24, xxl: 32, xxxl: 48 } as const;
 
-/** Deliberately modest radii: soft, not bubbly. */
-export const radius = { sm: 6, md: 10, lg: 14, pill: 999 } as const;
+/** Restrained radii: 4 chips · 6 controls · 10 panels · full only for the transport. */
+export const radius = { xs: 4, sm: 6, md: 6, lg: 10, pill: 999 } as const;
 
 export const fonts = {
-  display: 'SpaceGrotesk_700Bold',
-  displayMedium: 'SpaceGrotesk_500Medium',
-  body: 'Inter_400Regular',
-  bodyMedium: 'Inter_500Medium',
-  bodySemibold: 'Inter_600SemiBold',
+  /** Geist 600: chords, titles. */
+  display: 'Geist_600SemiBold',
+  displayMedium: 'Geist_500Medium',
+  body: 'Geist_400Regular',
+  bodyMedium: 'Geist_500Medium',
+  bodySemibold: 'Geist_600SemiBold',
+  /** Newsreader: display titles and lyrics. */
+  serif: 'Newsreader_400Regular',
+  serifItalic: 'Newsreader_400Regular_Italic',
+  /** Geist Mono: engraved labels and readouts. */
+  mono: 'GeistMono_400Regular',
+  monoMedium: 'GeistMono_500Medium',
 } as const;
 
 export const typeScale = {
-  hero: { fontFamily: fonts.display, fontSize: 40, lineHeight: 44, letterSpacing: -1 },
-  title: { fontFamily: fonts.display, fontSize: 28, lineHeight: 32, letterSpacing: -0.5 },
+  /** Display · Newsreader 56/1.0 */
+  hero: { fontFamily: fonts.serif, fontSize: 52, lineHeight: 56, letterSpacing: -1 },
+  /** Screen titles · Newsreader */
+  title: { fontFamily: fonts.serif, fontSize: 34, lineHeight: 40, letterSpacing: -0.5 },
+  /** Title · Geist 600 20/1.3 */
   heading: { fontFamily: fonts.display, fontSize: 20, lineHeight: 26, letterSpacing: -0.2 },
-  subheading: { fontFamily: fonts.bodySemibold, fontSize: 16, lineHeight: 22 },
-  body: { fontFamily: fonts.body, fontSize: 15, lineHeight: 22 },
-  bodyStrong: { fontFamily: fonts.bodyMedium, fontSize: 15, lineHeight: 22 },
-  caption: { fontFamily: fonts.bodyMedium, fontSize: 13, lineHeight: 18 },
-  overline: { fontFamily: fonts.bodySemibold, fontSize: 11, lineHeight: 14, letterSpacing: 1.2, textTransform: 'uppercase' as const },
-  mono: { fontFamily: fonts.displayMedium, fontSize: 15, lineHeight: 20 },
+  subheading: { fontFamily: fonts.bodySemibold, fontSize: 15, lineHeight: 21 },
+  /** Body · Geist 400 14/1.55 */
+  body: { fontFamily: fonts.body, fontSize: 14, lineHeight: 22 },
+  bodyStrong: { fontFamily: fonts.bodyMedium, fontSize: 14, lineHeight: 22 },
+  caption: { fontFamily: fonts.body, fontSize: 12.5, lineHeight: 18 },
+  /** Label · Mono 500 11, +14% caps: the engraved label. */
+  overline: { fontFamily: fonts.monoMedium, fontSize: 11, lineHeight: 14, letterSpacing: 1.5, textTransform: 'uppercase' as const },
+  /** Readout · Mono, tabular */
+  mono: { fontFamily: fonts.mono, fontSize: 14, lineHeight: 20, fontVariant: ['tabular-nums'] as 'tabular-nums'[] },
+  readout: { fontFamily: fonts.mono, fontSize: 28, lineHeight: 32, letterSpacing: -0.5, fontVariant: ['tabular-nums'] as 'tabular-nums'[] },
+  /** Chord · Geist 600 120/0.9 */
+  chord: { fontFamily: fonts.display, fontSize: 120, lineHeight: 112, letterSpacing: -4 },
+  /** Lyric · Newsreader 30/1.45 */
+  lyric: { fontFamily: fonts.serif, fontSize: 30, lineHeight: 44 },
 } as const;
 
 export type TypeVariant = keyof typeof typeScale;
 
-export const breakpoints = { tablet: 768, desktop: 1024, wide: 1400 } as const;
+/** ≥1280 full rail · 960–1279 icon rail · <960 focus (Android-style). */
+export const breakpoints = { tablet: 760, desktop: 960, wide: 1280 } as const;
 
-export const motion = { fast: 120, base: 200, slow: 320 } as const;
+/** Instant 80 · Quick 160 · Settle 240 (ms). Musical motion follows the audio clock instead. */
+export const motion = { fast: 80, base: 160, slow: 240 } as const;
 
+/** Depth is tone, not shadow: only modals and menus get a single soft shadow. */
 export function shadow(level: 1 | 2, scheme: 'dark' | 'light') {
-  const opacity = scheme === 'dark' ? 0.35 : 0.08;
-  return level === 1
-    ? { shadowColor: '#000', shadowOpacity: opacity, shadowRadius: 8, shadowOffset: { width: 0, height: 2 }, elevation: 2 }
-    : { shadowColor: '#000', shadowOpacity: opacity * 1.4, shadowRadius: 24, shadowOffset: { width: 0, height: 8 }, elevation: 8 };
+  if (level === 1) return {};
+  const opacity = scheme === 'dark' ? 0.45 : 0.14;
+  return { shadowColor: '#000', shadowOpacity: opacity, shadowRadius: 24, shadowOffset: { width: 0, height: 8 }, elevation: 8 };
+}
+
+/** Song artwork colour from the song's key: generated, no artwork needed. */
+export function keyColor(key: string | null | undefined): { bg: string; fg: string } {
+  if (!key) return { bg: brand.stone, fg: brand.ivory };
+  const pc = ['C', 'C#', 'D', 'Eb', 'E', 'F', 'F#', 'G', 'Ab', 'A', 'Bb', 'B'].indexOf(key.split(' ')[0].replace('Db', 'C#').replace('D#', 'Eb').replace('Gb', 'F#').replace('G#', 'Ab').replace('A#', 'Bb'));
+  const tiles = [
+    { bg: brand.olive, fg: brand.ivory },
+    { bg: brand.terracotta, fg: brand.ivory },
+    { bg: '#2F302B', fg: brand.amber },
+    { bg: brand.amber, fg: brand.charcoal },
+    { bg: brand.stone, fg: brand.ivory },
+  ];
+  return tiles[(pc < 0 ? 0 : pc) % tiles.length];
 }

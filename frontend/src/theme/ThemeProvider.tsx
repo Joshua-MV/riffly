@@ -1,5 +1,7 @@
-import { createContext, useContext, useMemo, useState, type ReactNode } from 'react';
+import { createContext, useContext, useMemo, type ReactNode } from 'react';
 import { useColorScheme } from 'react-native';
+
+import { updateSettings, useSettings } from '@/features/settings/store';
 
 import { darkColors, lightColors, type ColorTokens } from './tokens';
 
@@ -14,13 +16,13 @@ interface ThemeValue {
 
 const ThemeContext = createContext<ThemeValue | null>(null);
 
-/** Dark is the default; "system" follows the OS only when the user opts in. */
+/** Charcoal (dark) is the default; Ivory (light) or "match Windows" from Settings. Remembered. */
 export function ThemeProvider({ children }: { children: ReactNode }) {
   const system = useColorScheme();
-  const [preference, setPreference] = useState<SchemePreference>('dark');
+  const { theme: preference } = useSettings();
   const scheme = preference === 'system' ? (system === 'light' ? 'light' : 'dark') : preference;
   const value = useMemo<ThemeValue>(
-    () => ({ colors: scheme === 'dark' ? darkColors : lightColors, scheme, preference, setPreference }),
+    () => ({ colors: scheme === 'dark' ? darkColors : lightColors, scheme, preference, setPreference: (p) => updateSettings({ theme: p }) }),
     [scheme, preference],
   );
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;

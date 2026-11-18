@@ -12,6 +12,7 @@
 
 import { chordId, formatChord, QUALITY_ORDER, type ChordQuality, type ChordSymbol } from './chords';
 import { mod12, parsePitchClass, type PitchClass } from './notes';
+import { generateShapes } from './voicegen';
 
 /** Fret per string, lowest string first. null = muted, 0 = open. */
 export type Frets = readonly (number | null)[];
@@ -113,6 +114,10 @@ const CURATED: readonly CuratedVoicing[] = [
   { chord: 'Dm7', frets: [x, x, 0, 2, 1, 1], fingers: [x, x, 0, 2, 1, 1] },
   { chord: 'Dsus2', frets: [x, x, 0, 2, 3, 0], fingers: [x, x, 0, 1, 3, 0] },
   { chord: 'Dsus4', frets: [x, x, 0, 2, 3, 3], fingers: [x, x, 0, 1, 2, 3] },
+  { chord: 'Cadd9', frets: [x, 3, 2, 0, 3, 0], fingers: [x, 2, 1, 0, 3, 0] },
+  { chord: 'Cadd9', frets: [x, 3, 2, 0, 3, 3], fingers: [x, 2, 1, 0, 3, 4] },
+  { chord: 'Gadd9', frets: [3, 2, 0, 2, 0, 3], fingers: [2, 1, 0, 3, 0, 4] },
+  { chord: 'Csus2', frets: [x, 3, 0, 0, 1, 3], fingers: [x, 3, 0, 0, 1, 4] },
 ];
 
 function parseCuratedChord(label: string): ChordSymbol {
@@ -120,7 +125,7 @@ function parseCuratedChord(label: string): ChordSymbol {
   const root = m ? parsePitchClass(m[1]) : null;
   const suffix = m?.[2] ?? '';
   const quality = (
-    { '': 'maj', m: 'min', '7': '7', maj7: 'maj7', m7: 'm7', sus2: 'sus2', sus4: 'sus4' } as Record<string, ChordQuality>
+    { '': 'maj', m: 'min', '7': '7', maj7: 'maj7', m7: 'm7', sus2: 'sus2', sus4: 'sus4', add9: 'add9' } as Record<string, ChordQuality>
   )[suffix];
   if (root === null || !quality) throw new Error(`Bad curated chord ${label}`);
   return { root, quality };
@@ -198,12 +203,16 @@ const DIFFICULTY_RANK: Record<Difficulty, number> = { beginner: 0, intermediate:
 
 const cache = new Map<string, Voicing[]>();
 
-/** All voicings for a chord, easiest first. Slash bass is ignored (root-position shapes). */
-export function getVoicings(chord: ChordSymbol): Voicing[] {
-  const key = chordId(chord);
+/**
+ * All voicings for a chord, easiest first, in standard tuning (default) or any other tuning
+ * given as open-string MIDI notes (lowest string first). Slash chords (G/B) get shapes with
+ * that bass note; in standard tuning, plain chords use hand-picked open and barre shapes.
+ */
+export function getVoicings(chord: ChordSymbol, openMidi: readonly number[] = STANDARD_OPEN_MIDI): Voicing[] {
+  const standard = openMidi.length === 6 && openMidi.every((m, i) => m === STANDARD_OPEN_MIDI[i]);
+  const key = `${chordId(chord)}/${chord.bass ?? ''}@${openMidi.join(',')}`;
   const hit = cache.get(key);
   if (hit) return hit;
-  const base: ChordSymbol = { root: chord.root, quality: chord.quality };
   const out: Voicing[] = [];
   const seen = new Set<string>();
   const push = (v: Voicing) => {
@@ -211,6 +220,13 @@ export function getVoicings(chord: ChordSymbol): Voicing[] {
     seen.add(v.id);
     out.push(v);
   };
+  if (!standard || chord.bass !== undefined) {
+    for (const g of generateShapes(chord, openMidi, 4)) push(makeVoicing(chord, g.frets, g.fingers, 'open'));
+    if (standard && !out.length) out.push(...getVoicings({ root: chord.root, quality: chord.quality }));
+    cache.set(key, out);
+    return out;
+  }
+  const base: ChordSymbol = { root: chord.root, quality: chord.quality };
 
   for (const c of CURATED) {
     const sym = parseCuratedChord(c.chord);
@@ -228,6 +244,8 @@ export function getVoicings(chord: ChordSymbol): Voicing[] {
       push(makeVoicing(base, up.frets, up.fingers, shape));
     }
   }
+  // Chords without a hand-picked or movable shape (e.g. add9) come from the generator.
+  if (!out.length) for (const g of generateShapes(base, openMidi, 3)) push(makeVoicing(base, g.frets, g.fingers, 'open'));
   out.sort(
     (a, b) => DIFFICULTY_RANK[a.difficulty] - DIFFICULTY_RANK[b.difficulty] || a.minFret - b.minFret,
   );

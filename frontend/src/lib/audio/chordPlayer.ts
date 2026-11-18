@@ -10,11 +10,11 @@ const uriCache = new Map<string, string>();
 let player: AudioPlayer | null = null;
 
 /** Synthesize a strum (cached per voicing) and return a playable URI. */
-async function strumUri(frets: Frets): Promise<string> {
-  const key = frets.map((f) => (f === null ? 'x' : f)).join('-');
+async function strumUri(frets: Frets, openMidi?: readonly number[]): Promise<string> {
+  const key = frets.map((f) => (f === null ? 'x' : f)).join('-') + (openMidi ? `_t${openMidi.join('_')}` : '');
   const cached = uriCache.get(key);
   if (cached) return cached;
-  const wav = encodeWav(renderStrum(voicingMidiNotes(frets)));
+  const wav = encodeWav(renderStrum(voicingMidiNotes(frets, openMidi)));
   let uri: string;
   if (Platform.OS === 'web') {
     uri = URL.createObjectURL(new Blob([wav as BlobPart], { type: 'audio/wav' }));
@@ -27,9 +27,9 @@ async function strumUri(frets: Frets): Promise<string> {
   return uri;
 }
 
-/** Play a voicing as a synthesized guitar strum. */
-export async function playVoicing(frets: Frets): Promise<void> {
-  const uri = await strumUri(frets);
+/** Play a voicing as a synthesized guitar strum (standard tuning unless open strings are given). */
+export async function playVoicing(frets: Frets, openMidi?: readonly number[]): Promise<void> {
+  const uri = await strumUri(frets, openMidi);
   if (!player) player = createAudioPlayer({ uri });
   else player.replace({ uri });
   void player.seekTo(0).finally(() => player?.play());

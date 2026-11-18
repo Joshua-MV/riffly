@@ -22,16 +22,17 @@ export interface PlacedNote extends MidiNote, TabNote {}
 const MAX_FRET = 15;
 const CHORD_WINDOW = 0.035; // notes starting within 35 ms are played together
 
-function candidates(midi: number, capo: number): TabNote[] {
+function candidates(midi: number, capo: number, open: readonly number[]): TabNote[] {
   const out: TabNote[] = [];
   for (let s = 0; s < 6; s++) {
-    const fret = midi - STANDARD_OPEN_MIDI[s] - capo;
+    const fret = midi - open[s] - capo;
     if (fret >= 0 && fret <= MAX_FRET) out.push({ string: s, fret });
   }
   return out;
 }
 
-export function placeNotes(notes: readonly MidiNote[], capo = 0, minVelocity = 0.25): PlacedNote[] {
+/** `open` is the tuning (open-string MIDI notes, lowest first); default standard. */
+export function placeNotes(notes: readonly MidiNote[], capo = 0, minVelocity = 0.25, open: readonly number[] = STANDARD_OPEN_MIDI): PlacedNote[] {
   const sorted = notes.filter((n) => n.velocity >= minVelocity).sort((a, b) => a.start - b.start || a.midi - b.midi);
   const placed: PlacedNote[] = [];
   let hand = 2; // fret under the index finger
@@ -44,7 +45,7 @@ export function placeNotes(notes: readonly MidiNote[], capo = 0, minVelocity = 0
     for (const n of [...group].sort((a, b) => b.midi - a.midi)) {
       let best: TabNote | null = null;
       let bestCost = Infinity;
-      for (const c of candidates(n.midi, capo)) {
+      for (const c of candidates(n.midi, capo, open)) {
         if (used.has(c.string)) continue;
         const cost = (c.fret === 0 ? 0.5 : Math.abs(c.fret - hand)) + (c.fret > 12 ? 2 : 0);
         if (cost < bestCost) {

@@ -1,4 +1,5 @@
 mod engine;
+mod lyrics;
 
 use tauri::ipc::{InvokeBody, Request, Response};
 
@@ -29,13 +30,37 @@ async fn to_mp3(request: Request<'_>) -> Result<Response, String> {
     Ok(Response::new(mp3))
 }
 
+/// Is the on-device lyrics model downloaded?
+#[tauri::command]
+fn lyrics_model_status(app: tauri::AppHandle) -> Result<lyrics::ModelStatus, String> {
+    lyrics::status(&app)
+}
+
+/// Download the lyrics model (once, ~148 MB). Progress: "lyrics-model-progress" events.
+#[tauri::command]
+async fn download_lyrics_model(app: tauri::AppHandle) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || lyrics::download(&app))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+/// Write down the song's words with their times, on this PC. Progress: "lyrics-progress" events.
+#[tauri::command]
+async fn transcribe_lyrics(app: tauri::AppHandle, request: Request<'_>) -> Result<String, String> {
+    let bytes = body_bytes(&request)?;
+    let segments = tauri::async_runtime::spawn_blocking(move || lyrics::transcribe(&app, &bytes))
+        .await
+        .map_err(|e| e.to_string())??;
+    serde_json::to_string(&segments).map_err(|e| e.to_string())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_sql::Builder::new().build())
-        .invoke_handler(tauri::generate_handler![analyze_audio, to_mp3])
+        .invoke_handler(tauri::generate_handler![analyze_audio, to_mp3, lyrics_model_status, download_lyrics_model, transcribe_lyrics])
         .setup(|app| {
             if cfg!(debug_assertions) {
                 app.handle().plugin(

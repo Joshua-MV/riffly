@@ -34,7 +34,7 @@ describe('notes', () => {
 
 describe('tunings', () => {
   it('defines all presets with valid notes', () => {
-    expect(GUITAR_TUNINGS.map((t) => t.id)).toEqual(['standard', 'drop-d', 'half-down', 'full-down', 'open-g']);
+    expect(GUITAR_TUNINGS.map((t) => t.id)).toEqual(['standard', 'drop-d', 'half-down', 'full-down', 'open-g', 'open-d', 'dadgad', 'drop-c']);
     for (const t of GUITAR_TUNINGS) expect(tuningStrings(t)).toHaveLength(6);
   });
 
@@ -89,7 +89,7 @@ describe('voicings', () => {
   const library = libraryChords();
 
   it('covers every root and quality', () => {
-    expect(library).toHaveLength(12 * 10);
+    expect(library).toHaveLength(12 * 11);
     for (const entry of library) expect(entry.voicings.length).toBeGreaterThan(0);
   });
 

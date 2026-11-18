@@ -11,9 +11,16 @@ import { Platform } from 'react-native';
 import type { LocalSong } from '@/features/library/model';
 import { storage } from '@/features/library/storage';
 import { loopTarget } from '@/features/songs/timeline';
+import { chooseBarOffset, extendBeats } from '@/lib/music/fingerstyle';
 import { barDuration, renderClicks } from '@/lib/audio/click';
+import { createClickScheduler } from '@/lib/audio/metronome';
+import type { ClickScheduler } from '@/lib/audio/metronome.types';
 import { encodeWav } from '@/lib/audio/pluck';
 import { wavUri } from '@/lib/audio/wavUri';
+
+import { getSettings } from '@/features/settings/store';
+
+import { createClock, type PlaybackClock } from './clock';
 
 export interface LoopRange {
   start: number;
@@ -31,6 +38,11 @@ interface PlayerValue {
   /** Current count-in beat (1–4), or null when not counting in. */
   countingIn: { beat: number; beats: number } | null;
   error: string | null;
+  /** Smooth position for animation (60 fps between the player's own reports). */
+  clock: PlaybackClock;
+  /** Metronome clicks on the song's beats while it plays. */
+  metronome: boolean;
+  setMetronome: (on: boolean) => void;
   /** Load `song` if it isn't already loaded. Does not start playback. */
   load: (song: LocalSong) => Promise<void>;
   /** Keep the loaded song's metadata (corrections, capo…) fresh for the mini player. */
@@ -52,13 +64,51 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   const player = useAudioPlayer(null, { updateInterval: 50 });
   const status = useAudioPlayerStatus(player);
   const [song, setSong] = useState<LocalSong | null>(null);
-  const [rate, setRateState] = useState(1);
+  const [rate, setRateState] = useState(() => getSettings().defaultSpeed);
   const [loop, setLoop] = useState<LoopRange | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [countingIn, setCountingIn] = useState<{ beat: number; beats: number } | null>(null);
   const countInTimers = useRef<ReturnType<typeof setTimeout>[]>([]);
   const clickPlayer = useRef<AudioPlayer | null>(null);
   const loadedId = useRef<string | null>(null);
+  const clock = useMemo(() => createClock(), []);
+  const [metronome, setMetronome] = useState(false);
+  const clicker = useRef<ClickScheduler | null>(null);
+
+  // Feed every position report to the smooth clock.
+  useEffect(() => {
+    clock.report(status.currentTime, status.playing, rate);
+  }, [clock, status.currentTime, status.playing, rate]);
+
+  // Metronome: every 25 ms, schedule the clicks of beats due in the next ~150 ms. Beat 1 of
+  // each bar (from the chord changes) is accented.
+  const grid = useMemo(() => {
+    if (!song) return { beats: [] as number[], offset: 0 };
+    const beats = extendBeats(song.analysis.beats);
+    const starts = song.analysis.chords.filter((c) => c.label !== 'N').map((c) => c.start);
+    return { beats, offset: chooseBarOffset(beats, starts) };
+  }, [song]);
+  useEffect(() => {
+    if (!metronome || !status.playing || !grid.beats.length) return;
+    if (!clicker.current) clicker.current = createClickScheduler();
+    let next = grid.beats.findIndex((b) => b >= clock.now() - 0.01);
+    if (next < 0) return;
+    const tick = () => {
+      const t = clock.now();
+      // After a seek, jump the pointer to the new position.
+      if (next > 0 && grid.beats[next - 1] > t + 0.2) next = grid.beats.findIndex((b) => b >= t - 0.01);
+      while (next >= 0 && next < grid.beats.length && grid.beats[next] < t - 0.05) next++;
+      while (next >= 0 && next < grid.beats.length && grid.beats[next] <= t + 0.15 * rate) {
+        const accent = getSettings().accentFirstBeat && (((next - grid.offset) % 4) + 4) % 4 === 0;
+        clicker.current?.click((grid.beats[next] - t) / rate, accent, 0.9);
+        next++;
+      }
+    };
+    tick();
+    const id = setInterval(tick, 25);
+    return () => clearInterval(id);
+  }, [metronome, status.playing, grid, clock, rate]);
+  useEffect(() => () => clicker.current?.dispose(), []);
 
   useEffect(() => {
     if (Platform.OS !== 'web') void setAudioModeAsync({ playsInSilentMode: true, shouldPlayInBackground: true });
@@ -152,12 +202,18 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       loop,
       countingIn,
       error,
+      clock,
+      metronome,
+      setMetronome,
       load,
       refresh,
       play,
       pause,
       toggle: (opts) => (status.playing || countingIn ? pause() : play(opts)),
-      seek: (t) => void player.seekTo(Math.max(0, t)),
+      seek: (t) => {
+        clock.jump(Math.max(0, t));
+        void player.seekTo(Math.max(0, t));
+      },
       setRate: (r) => {
         player.shouldCorrectPitch = true; // slower without lowering the pitch
         player.setPlaybackRate(r, 'high');
@@ -172,7 +228,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         setLoop(null);
       },
     }),
-    [song, status.currentTime, status.duration, status.playing, status.isLoaded, rate, loop, countingIn, error, load, refresh, play, pause, player],
+    [song, status.currentTime, status.duration, status.playing, status.isLoaded, rate, loop, countingIn, error, clock, metronome, load, refresh, play, pause, player],
   );
 
   return <PlayerContext.Provider value={value}>{children}</PlayerContext.Provider>;

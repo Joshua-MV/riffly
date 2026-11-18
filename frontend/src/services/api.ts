@@ -28,6 +28,18 @@ export interface AnalysisResult {
   model_version: string;
   processing_seconds: number;
   notes: string[];
+  /** Strumming detected from the recording (on-device engine 0.2+). */
+  strum?: StrumAnalysis;
+}
+
+export interface StrumAnalysis {
+  /** Eight eighth notes of a 4/4 bar: D down, U up, - rest. */
+  pattern: string;
+  /** Beat index (mod 4) that starts a bar, in the engine's own beat list. */
+  downbeat: number;
+  sixteenth_feel: boolean;
+  confidence: number;
+  sixteenths: number[];
 }
 
 export type JobStatus = 'processing' | 'completed' | 'failed';

@@ -1,8 +1,10 @@
+import { router } from 'expo-router';
 import { StyleSheet, View } from 'react-native';
 
 import { Button, IconButton } from '@/components/ui/Button';
 import { Card, Chip } from '@/components/ui/primitives';
 import { Text } from '@/components/ui/Text';
+import { GUITAR_TUNINGS, type Tuning } from '@/lib/music/instruments';
 import type { CapoOption } from '@/lib/music/simplify';
 import { useTheme } from '@/theme/ThemeProvider';
 import { spacing } from '@/theme/tokens';
@@ -10,14 +12,24 @@ import { spacing } from '@/theme/tokens';
 export interface CapoCardProps {
   capo: number;
   keyShift: number;
+  tuning: Tuning;
+  /** False for open/drop tunings, where chord shapes differ from standard. */
+  standardShapes: boolean;
   options: CapoOption[];
   recommended: CapoOption | null;
   onCapo: (c: number) => void;
   onKeyShift: (k: number) => void;
+  onTuning: (id: string) => void;
 }
 
-/** "Make it easier": capo suggestion + manual capo + (advanced) key change. */
-export function CapoCard({ capo, keyShift, options, recommended, onCapo, onKeyShift }: CapoCardProps) {
+function tuningHelp(t: Tuning, standardShapes: boolean): string {
+  if (t.id === 'standard') return 'Chords are shown for a guitar in standard tuning. If the band used a different tuning, pick it to see the shapes they played instead.';
+  if (standardShapes) return `Tune every string down like the band (${t.notes.join(' ')}). You play the usual shapes, so the chord names are the shapes, not the notes that sound.`;
+  return `Chord shapes are drawn for ${t.name} (${t.notes.join(' ')}). The names are the chords that sound; the diagrams and tab use this tuning's strings.`;
+}
+
+/** "Make it easier": tuning + capo suggestion + manual capo + (advanced) key change. */
+export function CapoCard({ capo, keyShift, tuning, standardShapes, options, recommended, onCapo, onKeyShift, onTuning }: CapoCardProps) {
   const { colors } = useTheme();
   const current = options.find((o) => o.capo === capo);
   const easyPct = current ? Math.round(current.easyShare * 100) : 0;
@@ -33,6 +45,27 @@ export function CapoCard({ capo, keyShift, options, recommended, onCapo, onKeySh
         </View>
       </View>
 
+      <View style={{ gap: spacing.xs }}>
+        <View style={styles.row}>
+          <Text variant="overline" tone="subtle" style={{ width: 52 }}>Tuning</Text>
+          {GUITAR_TUNINGS.map((t) => (
+            <Chip key={t.id} label={t.name} selected={t.id === tuning.id} onPress={() => onTuning(t.id)} />
+          ))}
+        </View>
+        <View style={[styles.row, { alignItems: 'flex-start' }]}>
+          <Text variant="caption" tone="muted" style={{ flex: 1, minWidth: 220 }}>{tuningHelp(tuning, standardShapes)}</Text>
+          {tuning.id !== 'standard' && (
+            <Button label="Tune to this" icon="musical-note" size="sm" variant="secondary" onPress={() => router.push({ pathname: '/', params: { tuning: tuning.id } })} />
+          )}
+        </View>
+      </View>
+
+      {!standardShapes && (
+        <Text variant="caption" tone="muted" style={[styles.divider, { borderTopColor: colors.border }]}>
+          Capo suggestions are for standard-shape tunings. You can still set a capo below.
+        </Text>
+      )}
+
       {recommended && recommended.capo !== capo && (
         <View style={[styles.suggest, { backgroundColor: colors.successSoft }]}>
           <View style={{ flex: 1, gap: 2 }}>
@@ -45,7 +78,7 @@ export function CapoCard({ capo, keyShift, options, recommended, onCapo, onKeySh
           <Button label={`Use capo ${recommended.capo}`} onPress={() => onCapo(recommended.capo)} />
         </View>
       )}
-      {!recommended && capo === 0 && <Text variant="caption" tone="success">This song already uses easy shapes, so you don't need a capo.</Text>}
+      {standardShapes && !recommended && capo === 0 && <Text variant="caption" tone="success">This song already uses easy shapes, so you don't need a capo.</Text>}
 
       <View style={styles.row}>
         <Text variant="overline" tone="subtle" style={{ width: 52 }}>Capo</Text>

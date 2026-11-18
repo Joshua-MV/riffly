@@ -10,7 +10,10 @@ import { estimateTimes, isTimed, layoutSong, lineAt, lyricsToText, parseLyrics, 
 import { useTheme } from '@/theme/ThemeProvider';
 import { radius, spacing, typeScale } from '@/theme/tokens';
 
+import { lyricsEngine } from '@/services/lyricsEngine';
+
 import { useUpdateSong } from '../hooks';
+import { AutoLyrics } from './AutoLyrics';
 import type { TimelineChord } from '../timeline';
 
 const MONO = Platform.select({ web: 'ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace', ios: 'Menlo', default: 'monospace' });
@@ -30,12 +33,17 @@ export function LyricsPanel({ song, timeline, time, playing, onSeek, onPlayFrom,
   const update = useUpdateSong(song.id);
   const [editing, setEditing] = useState(false);
   const [syncing, setSyncing] = useState(false);
+  const [pasting, setPasting] = useState(false);
   const lyrics = song.lyrics;
 
   const save = (next: Lyrics) => update.mutate({ lyrics: next });
 
+  // Windows app: get the words automatically by listening to the song on this PC.
+  if (!lyrics && !pasting && lyricsEngine.available()) {
+    return <AutoLyrics song={song} onDone={save} onPaste={() => setPasting(true)} />;
+  }
   if (!lyrics || editing) {
-    return <LyricsEditor initial={lyrics ? lyricsToText(lyrics) : ''} onCancel={lyrics ? () => setEditing(false) : undefined} onSave={(l) => { save(l); setEditing(false); }} />;
+    return <LyricsEditor initial={lyrics ? lyricsToText(lyrics) : ''} onCancel={lyrics ? () => setEditing(false) : pasting ? () => setPasting(false) : undefined} onSave={(l) => { save({ ...l, source: 'user' }); setEditing(false); setPasting(false); }} />;
   }
   if (syncing) {
     return (
@@ -59,11 +67,12 @@ export function LyricsPanel({ song, timeline, time, playing, onSeek, onPlayFrom,
       large={large}
       onEdit={() => setEditing(true)}
       onSync={() => setSyncing(true)}
+      onRelisten={lyricsEngine.available() ? () => update.mutate({ lyrics: undefined }) : undefined}
     />
   );
 }
 
-function LyricsEditor({ initial, onSave, onCancel }: { initial: string; onSave: (l: Lyrics) => void; onCancel?: () => void }) {
+export function LyricsEditor({ initial, onSave, onCancel }: { initial: string; onSave: (l: Lyrics) => void; onCancel?: () => void }) {
   const { colors } = useTheme();
   const [text, setText] = useState(initial);
   const parsed = useMemo(() => parseLyrics(text), [text]);
@@ -103,7 +112,7 @@ function LyricsEditor({ initial, onSave, onCancel }: { initial: string; onSave: 
 }
 
 /** Tap-along timing: play the song and press the big button as each line starts. */
-function SyncLyrics({ lyrics, time, playing, onStart, onDone, onCancel }: { lyrics: Lyrics; time: number; playing: boolean; onStart: () => void; onDone: (l: Lyrics) => void; onCancel: () => void }) {
+export function SyncLyrics({ lyrics, time, playing, onStart, onDone, onCancel }: { lyrics: Lyrics; time: number; playing: boolean; onStart: () => void; onDone: (l: Lyrics) => void; onCancel: () => void }) {
   const { colors } = useTheme();
   const sung = lyrics.lines.map((l, i) => ({ ...l, i })).filter((l) => l.text);
   const [times, setTimes] = useState<number[]>([]);
@@ -155,7 +164,7 @@ function SyncLyrics({ lyrics, time, playing, onStart, onDone, onCancel }: { lyri
   );
 }
 
-function ChordSheet({ lyrics, timeline, time, duration, onSeek, large, onEdit, onSync }: { lyrics: Lyrics; timeline: TimelineChord[]; time: number; duration: number; onSeek: (t: number) => void; large: boolean; onEdit: () => void; onSync: () => void }) {
+function ChordSheet({ lyrics, timeline, time, duration, onSeek, large, onEdit, onSync, onRelisten }: { lyrics: Lyrics; timeline: TimelineChord[]; time: number; duration: number; onSeek: (t: number) => void; large: boolean; onEdit: () => void; onSync: () => void; onRelisten?: () => void }) {
   const { colors } = useTheme();
   const [autoScroll, setAutoScroll] = useState(true);
   const [size, setSize] = useState(large ? 20 : 16);
@@ -189,7 +198,13 @@ function ChordSheet({ lyrics, timeline, time, duration, onSeek, large, onEdit, o
         <View style={{ flex: 1 }} />
         <Button label="Sync" icon="timer-outline" size="sm" variant="secondary" onPress={onSync} />
         <Button label="Edit" icon="create-outline" size="sm" variant="ghost" onPress={onEdit} />
+        {onRelisten && <Button label="Listen again" icon="ear-outline" size="sm" variant="ghost" onPress={onRelisten} />}
       </View>
+      {lyrics.source === 'heard' && (
+        <Text variant="caption" tone="muted">
+          Written down by Riffly from the recording. Sung words are hard to hear over the music, so some may be wrong: tap Edit to fix them.
+        </Text>
+      )}
       {!timed && (
         <Notice tone="warning">
           Line timing is estimated, so chords may sit over the wrong words. Tap Sync and tap along once to time each line.

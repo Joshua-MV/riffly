@@ -6,7 +6,7 @@ import { ChordDiagram } from '@/components/music/ChordDiagram';
 import { Button, IconButton } from '@/components/ui/Button';
 import { Card, Chip, EmptyState, Screen } from '@/components/ui/primitives';
 import { Text } from '@/components/ui/Text';
-import { MiniPlayer } from '@/features/player/MiniPlayer';
+import { Transport } from '@/features/player/Transport';
 import { playVoicing } from '@/lib/audio/chordPlayer';
 import { chordTones, formatChord, parseChordId, QUALITIES } from '@/lib/music/chords';
 import { pitchClassName } from '@/lib/music/notes';
@@ -42,7 +42,8 @@ function instructions(v: Voicing): string[] {
 
 export default function ChordDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { isPhone } = useLayout();
+  const { isPhone, width } = useLayout();
+  const wide = width >= 960;
   const chord = parseChordId(String(id));
   const [index, setIndex] = useState(0);
 
@@ -120,7 +121,7 @@ export default function ChordDetailScreen() {
         </View>
       </View>
     </Screen>
-    <MiniPlayer />
+    {!wide && <Transport />}
     </View>
   );
 }

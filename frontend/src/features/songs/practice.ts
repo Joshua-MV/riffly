@@ -2,25 +2,56 @@
 
 import { practiceOf, type LocalSong, type PracticeSettings } from '@/features/library/model';
 import { buildFingerstyleTab, PATTERNS, type TabBar } from '@/lib/music/fingerstyle';
-import { getVoicings } from '@/lib/music/voicings';
+import { tuningById, tuningStrings, uniformShift, type Tuning } from '@/lib/music/instruments';
+import { getVoicings, STANDARD_OPEN_MIDI } from '@/lib/music/voicings';
 import { parseChord } from '@/lib/music/chords';
 
 import { buildTimeline, type TimelineChord } from './timeline';
 
-/**
- * Timeline whose `display` is the chord *shape* to play: corrections applied, then the key
- * shift, then the capo (shape = sounding chord − capo).
- */
-export function practiceTimeline(song: LocalSong, settings: PracticeSettings = practiceOf(song)): TimelineChord[] {
-  return buildTimeline(song.analysis.chords, song.corrections, settings.keyShift - settings.capo);
+export interface PlayContext {
+  tuning: Tuning;
+  /** Semitones added to sounding chords to get the shape names you play. */
+  displayOffset: number;
+  /** Open strings the chord *diagrams* are drawn for (standard shapes in down-tunings). */
+  shapeMidi: readonly number[];
+  /** Open strings as actually tuned (for sound and transcription). */
+  soundMidi: readonly number[];
+  /** True when shapes are the standard ones (standard, half-step down, whole-step down). */
+  standardShapes: boolean;
 }
 
-export function practiceTab(timeline: readonly TimelineChord[], beats: readonly number[], patternId: string): TabBar[] {
+/**
+ * How to show a song for the chosen tuning and capo:
+ * - standard: shape = sounding chord − capo (+ key change)
+ * - half/whole-step down: you tune down like the band, so the same shapes are named a half or
+ *   whole step higher than they sound (Eb sounds when you play an E shape)
+ * - open/drop tunings: chord names are what sounds (− capo), shapes come from that tuning
+ */
+export function playContext(settings: PracticeSettings): PlayContext {
+  const tuning = tuningById(settings.tuning);
+  const shift = uniformShift(tuning);
+  const soundMidi = tuningStrings(tuning).map((s) => s.midi);
+  return {
+    tuning,
+    displayOffset: settings.keyShift - settings.capo - (shift ?? 0),
+    shapeMidi: shift !== null ? STANDARD_OPEN_MIDI : soundMidi,
+    soundMidi,
+    standardShapes: shift !== null,
+  };
+}
+
+/** Timeline whose `display` is the chord *shape* to play (corrections, key change, tuning, capo). */
+export function practiceTimeline(song: LocalSong, settings: PracticeSettings = practiceOf(song)): TimelineChord[] {
+  return buildTimeline(song.analysis.chords, song.corrections, playContext(settings).displayOffset);
+}
+
+export function practiceTab(timeline: readonly TimelineChord[], beats: readonly number[], patternId: string, shapeMidi?: readonly number[]): TabBar[] {
   const pattern = PATTERNS.find((p) => p.id === patternId) ?? PATTERNS[0];
   return buildFingerstyleTab(
     timeline.map((c) => ({ start: c.start, end: c.end, shape: c.label === 'N' ? 'N' : c.display })),
     beats,
     pattern,
+    shapeMidi,
   );
 }
 
@@ -33,7 +64,7 @@ export interface SongChordSummary {
 }
 
 /** Distinct chord shapes in the song, in order of first appearance. */
-export function songChords(timeline: readonly TimelineChord[]): SongChordSummary[] {
+export function songChords(timeline: readonly TimelineChord[], shapeMidi?: readonly number[]): SongChordSummary[] {
   const map = new Map<string, SongChordSummary>();
   let total = 0;
   for (const c of timeline) {
@@ -44,7 +75,7 @@ export function songChords(timeline: readonly TimelineChord[]): SongChordSummary
     if (entry) entry.share += dur;
     else {
       const sym = parseChord(c.display);
-      const v = sym ? getVoicings(sym)[0] : undefined;
+      const v = sym ? getVoicings(sym, shapeMidi)[0] : undefined;
       map.set(c.display, { shape: c.display, share: dur, firstAt: c.start, difficulty: v?.difficulty ?? 'unknown' });
     }
   }

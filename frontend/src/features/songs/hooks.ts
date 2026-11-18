@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { applyPatch, removeCorrection, upsertCorrection, type ChordCorrection, type LocalSong, type SongPatch } from '@/features/library/model';
 import { storage } from '@/features/library/storage';
+import { localEngine } from '@/services/localEngine';
 
 /** All song data comes from this device's storage; react-query just caches it. */
 export const songKeys = {
@@ -73,4 +74,29 @@ export function useDeleteSong() {
 
 export function useExportMp3() {
   return useMutation({ mutationFn: (song: LocalSong) => storage.exportMp3(song) });
+}
+
+/** Songs analysed by an older engine are re-analysed on this PC to get the improved chords. */
+export const CURRENT_ENGINE = 'riffly-cpp-0.2';
+export const needsReanalysis = (song: LocalSong) => localEngine.available() && !song.analysis.model_version.startsWith(CURRENT_ENGINE);
+
+/** Re-run chord/tempo/strum analysis on the saved MP3; corrections and settings are kept. */
+export function useReanalyse(id: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async () => {
+      const current = await storage.get(id);
+      if (!current) throw new Error('This song is not on this device.');
+      const bytes = await localEngine.readBytes(await storage.uploadSource(current));
+      const analysis = await localEngine.analyze(bytes);
+      const latest = (await storage.get(id)) ?? current; // settings may have changed meanwhile
+      const next: LocalSong = { ...latest, analysis, updatedAt: new Date().toISOString() };
+      await storage.put(next);
+      return next;
+    },
+    onSuccess: (song) => {
+      qc.setQueryData(songKeys.detail(id), song);
+      void qc.invalidateQueries({ queryKey: songKeys.all, exact: true });
+    },
+  });
 }

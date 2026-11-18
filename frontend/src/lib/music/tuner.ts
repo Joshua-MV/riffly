@@ -17,6 +17,8 @@ export interface TunerReading extends NoteReading {
   /** Deviation from the target in cents (can exceed ±50 when far off a selected string). */
   centsOff: number;
   state: TuneState;
+  /** Cents off, smoothed over recent frames: what the needle should show. */
+  centsSmooth: number;
   /** True once the note has stayed in tune for `stableMs`. */
   stable: boolean;
   clarity: number;
@@ -39,6 +41,10 @@ export interface TunerEngineOptions {
 }
 
 const HISTORY = 5;
+/** Keep the current string as the target unless another is closer by this many cents. */
+const SWITCH_MARGIN = 120;
+/** Quiet frames are tolerated this long (a note fading out) before the state resets. */
+const GATE_HOLD_MS = 250;
 
 export class TunerEngine {
   private readonly detector: YinPitchDetector;
@@ -46,6 +52,9 @@ export class TunerEngine {
     Pick<TunerEngineOptions, 'strings' | 'selectedString'>;
   private history: number[] = [];
   private inTuneSince: number | null = null;
+  private targetIndex: number | null = null;
+  private smooth: number | null = null;
+  private lastSound = -Infinity;
 
   constructor(options: TunerEngineOptions) {
     this.opts = {
@@ -67,20 +76,43 @@ export class TunerEngine {
   reset(): void {
     this.history = [];
     this.inTuneSince = null;
+    this.targetIndex = null;
+    this.smooth = null;
+  }
+
+  /** Auto mode: the closest string, but stay on the current one unless another is clearly closer. */
+  private pickString(strings: readonly TunedString[], frequency: number): TunedString {
+    const best = closestString(strings, frequency);
+    const cur = this.targetIndex !== null ? strings[this.targetIndex] : undefined;
+    if (cur && cur.index !== best.index) {
+      const dCur = Math.abs(centsBetween(frequency, cur.frequency));
+      const dBest = Math.abs(centsBetween(frequency, best.frequency));
+      if (dCur - dBest < SWITCH_MARGIN) return cur;
+    }
+    this.targetIndex = best.index;
+    return best;
   }
 
   /** Process one frame. Returns null while silent or when no clear pitch is present. */
   process(frame: Float32Array, now: number): TunerReading | null {
     const level = rms(frame);
     if (level < this.opts.noiseGate) {
-      this.reset();
+      if (now - this.lastSound > GATE_HOLD_MS) this.reset();
       return null;
     }
+    this.lastSound = now;
     const estimate = this.detector.detect(frame);
     if (!estimate || estimate.clarity < this.opts.minClarity) return null;
 
-    // Median of recent estimates rejects single-frame octave errors.
-    this.history.push(estimate.frequency);
+    // Octave slips (common on the low strings, whose 2nd harmonic is strong): fold an estimate
+    // that is an octave away from the recent median back onto it.
+    let f = estimate.frequency;
+    if (this.history.length >= 3) {
+      const med = [...this.history].sort((a, b) => a - b)[Math.floor(this.history.length / 2)];
+      for (const k of [2, 0.5]) if (Math.abs(centsBetween(f / k, med)) < 60) f /= k;
+    }
+    // Median of recent estimates rejects single-frame errors.
+    this.history.push(f);
     if (this.history.length > HISTORY) this.history.shift();
     const sorted = [...this.history].sort((a, b) => a - b);
     const frequency = sorted[Math.floor(sorted.length / 2)];
@@ -93,12 +125,14 @@ export class TunerEngine {
       target =
         selectedString !== null && selectedString !== undefined
           ? strings[selectedString]
-          : closestString(strings, frequency);
+          : this.pickString(strings, frequency);
       targetFrequency = target.frequency;
     } else {
       targetFrequency = this.opts.a4 * 2 ** ((note.midi - 69) / 12);
     }
     const centsOff = centsBetween(frequency, targetFrequency);
+    // Exponential smoothing for the needle; a big jump (new string / new pluck) is followed at once.
+    this.smooth = this.smooth === null || Math.abs(centsOff - this.smooth) > 30 ? centsOff : this.smooth + 0.35 * (centsOff - this.smooth);
     const inTune = Math.abs(centsOff) <= this.opts.inTuneCents;
     if (inTune) this.inTuneSince ??= now;
     else this.inTuneSince = null;
@@ -108,6 +142,7 @@ export class TunerEngine {
       target,
       targetFrequency,
       centsOff,
+      centsSmooth: this.smooth,
       state: inTune ? 'in-tune' : centsOff < 0 ? 'flat' : 'sharp',
       stable: inTune && this.inTuneSince !== null && now - this.inTuneSince >= this.opts.stableMs,
       clarity: estimate.clarity,

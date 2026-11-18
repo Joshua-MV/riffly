@@ -70,6 +70,28 @@ extern "C" int riffly_decode(const uint8_t* data, size_t size, float** samples_o
   }
 }
 
+extern "C" int riffly_decode_mono(const uint8_t* data, size_t size, int target_rate, float** samples_out, size_t* frames_out, char** error_out) {
+  try {
+    riffly::Pcm pcm;
+    std::string err;
+    if (!data || size == 0) return fail(error_out, "The file is empty.");
+    if (target_rate <= 0) return fail(error_out, "Invalid sample rate.");
+    if (!riffly::decode(data, size, pcm, err)) return fail(error_out, err);
+    std::vector<float> mono = riffly::to_mono(pcm);
+    pcm.samples.clear();
+    pcm.samples.shrink_to_fit();
+    mono = riffly::resample(mono, pcm.sample_rate, target_rate);
+    float* buf = static_cast<float*>(std::malloc(mono.size() * sizeof(float) + 1));
+    if (!buf) return fail(error_out, "Out of memory.");
+    std::memcpy(buf, mono.data(), mono.size() * sizeof(float));
+    *samples_out = buf;
+    *frames_out = mono.size();
+    return 0;
+  } catch (const std::exception& e) {
+    return fail(error_out, std::string("Decoding failed: ") + e.what());
+  }
+}
+
 extern "C" int riffly_is_mp3(const uint8_t* data, size_t size) {
   return riffly::sniff(data, size) == riffly::Container::Mp3 ? 1 : 0;
 }

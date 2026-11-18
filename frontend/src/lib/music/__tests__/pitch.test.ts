@@ -93,4 +93,31 @@ describe('TunerEngine', () => {
     expect(r.octave).toBe(3);
     expect(Math.abs(r.centsOff)).toBeLessThan(2);
   });
+
+  it('stays on the string being tuned instead of flipping to a neighbour', () => {
+    const engine = new TunerEngine({ sampleRate: SR, strings });
+    // An A string tuned far down (2.6 semitones flat), drifting up through the gap to E.
+    const a2 = 110;
+    let r = engine.process(stringTone(a2 * 2 ** (-150 / 1200)), 0)!;
+    expect(r.target?.note).toBe('A2');
+    r = engine.process(stringTone(a2 * 2 ** (-260 / 1200)), 50)!;
+    expect(r.target?.note).toBe('A2'); // closer to E2 now, but not clearly: keep A2
+    for (let i = 0; i < 6; i++) r = engine.process(stringTone(82.41), 100 + i * 50)!;
+    expect(r.target?.note).toBe('E2'); // clearly an E now
+  });
+
+  it('folds single-frame octave slips back and smooths the needle', () => {
+    const engine = new TunerEngine({ sampleRate: SR, strings });
+    for (let i = 0; i < 4; i++) engine.process(stringTone(82.41 * 2 ** (-10 / 1200)), i * 40);
+    const r = engine.process(stringTone(2 * 82.41 * 2 ** (-10 / 1200)), 200)!;
+    expect(r.target?.note).toBe('E2');
+    expect(r.centsSmooth).toBeCloseTo(-10, 0);
+  });
+
+  it('keeps its state through a short quiet moment', () => {
+    const engine = new TunerEngine({ sampleRate: SR, strings, stableMs: 100 });
+    for (let i = 0; i < 4; i++) engine.process(stringTone(110), i * 40);
+    expect(engine.process(new Float32Array(N), 180)).toBeNull();
+    expect(engine.process(stringTone(110), 220)!.stable).toBe(true);
+  });
 });

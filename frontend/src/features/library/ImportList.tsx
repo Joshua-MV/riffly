@@ -1,56 +1,76 @@
-import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import { ActivityIndicator, StyleSheet, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 
-import { Button, IconButton } from '@/components/ui/Button';
-import { Card, ProgressBar } from '@/components/ui/primitives';
+import { Button } from '@/components/ui/Button';
 import { Text } from '@/components/ui/Text';
 import { useTheme } from '@/theme/ThemeProvider';
-import { spacing } from '@/theme/tokens';
+import { radius, spacing } from '@/theme/tokens';
 
 import { cancelImport, dismissImport, IMPORT_PHASE_LABEL, useImports, type ImportTask } from './importer';
 
-/** Songs currently being imported (shown on the Analyze and My Music screens). */
+const STAGES = ['Read', 'Key', 'Tempo', 'Beats', 'Chords', 'Strum'] as const;
+
+/** Songs being imported: a staged pipeline that fills left to right. */
 export function ImportList({ hideDone = false }: { hideDone?: boolean }) {
   const tasks = useImports().filter((t) => !(hideDone && t.phase === 'done'));
   if (!tasks.length) return null;
   return (
-    <View style={{ gap: spacing.sm }} aria-live="polite">
-      {tasks.map((t) => (
-        <ImportRow key={t.id} task={t} />
+    <View style={{ gap: spacing.sm, flex: 1, minWidth: 280 }} aria-live="polite">
+      {tasks.map((t, i) => (
+        <ImportCard key={t.id} task={t} index={i} total={tasks.length} />
       ))}
     </View>
   );
 }
 
-function ImportRow({ task }: { task: ImportTask }) {
+function ImportCard({ task, index, total }: { task: ImportTask; index: number; total: number }) {
   const { colors } = useTheme();
   const busy = task.phase === 'uploading' || task.phase === 'analysing' || task.phase === 'saving';
-  const step = { uploading: 1, analysing: 2, saving: 3, done: 3, failed: 0 }[task.phase];
+  // Phases map onto the six stages: reading the file, analysing (key → strum), saving.
+  const filled = task.phase === 'uploading' ? 1 : task.phase === 'analysing' ? 4 : 6;
+  const title = task.name.replace(/\.(mp3|wav|m4a)$/i, '');
   return (
-    <Card style={[styles.row, task.phase === 'failed' && { borderColor: colors.danger }]}>
-      <View style={styles.icon}>
-        {busy ? (
-          <ActivityIndicator color={colors.accent} />
-        ) : (
-          <Ionicons name={task.phase === 'done' ? 'checkmark-circle' : 'alert-circle'} size={24} color={task.phase === 'done' ? colors.success : colors.danger} />
-        )}
-      </View>
-      <View style={{ flex: 1, gap: spacing.xs }}>
-        <Text variant="subheading" numberOfLines={1}>{task.name}</Text>
-        <Text variant="caption" tone={task.phase === 'failed' ? 'danger' : 'muted'}>
-          {task.phase === 'failed' ? task.error : busy ? `${IMPORT_PHASE_LABEL[task.phase]}…` : 'Saved to this device as MP3'}
+    <View style={[styles.card, { backgroundColor: colors.surface, borderColor: task.phase === 'failed' ? colors.danger : colors.border }]}>
+      <View style={styles.head}>
+        <Text variant="overline" tone={task.phase === 'failed' ? 'danger' : task.phase === 'done' ? 'success' : 'subtle'}>
+          {task.phase === 'failed' ? 'Couldn’t import' : task.phase === 'done' ? 'Ready to play' : `Analysing · ${index + 1} of ${total}`}
         </Text>
-        {task.phase === 'uploading' && <ProgressBar progress={task.progress} />}
+        {task.phase === 'uploading' && <Button label="Cancel" variant="ghost" size="sm" onPress={() => cancelImport(task.id)} />}
+        {!busy && <Button label="Dismiss" variant="ghost" size="sm" onPress={() => dismissImport(task.id)} />}
       </View>
-      {task.phase === 'uploading' && <Button label="Cancel" variant="ghost" size="sm" onPress={() => cancelImport(task.id)} />}
-      {task.phase === 'done' && task.songId && <Button label="Open" size="sm" onPress={() => { dismissImport(task.id); router.push(`/song/${task.songId}`); }} />}
-      {!busy && <IconButton icon="close" label="Dismiss" size={32} onPress={() => dismissImport(task.id)} />}
-    </Card>
+      <Text variant="subheading" numberOfLines={1}>{title}</Text>
+      {task.phase === 'failed' ? (
+        <Text variant="caption" tone="danger">{task.error}</Text>
+      ) : (
+        <>
+          <View style={styles.bars}>
+            {STAGES.map((s, i) => (
+              <View key={s} style={[styles.bar, { backgroundColor: i < filled ? (task.phase === 'done' ? colors.success : i === filled - 1 && busy ? colors.accent : colors.success) : colors.border }]} />
+            ))}
+          </View>
+          <View style={styles.labels}>
+            {STAGES.map((s, i) => (
+              <Text key={s} variant="overline" style={{ fontSize: 9, color: i < filled - (busy ? 1 : 0) ? colors.textMuted : i === filled - 1 && busy ? colors.highlight : colors.textDisabled }}>
+                {s}{i < filled - (busy ? 1 : 0) ? ' ✓' : i === filled - 1 && busy ? '…' : ''}
+              </Text>
+            ))}
+          </View>
+        </>
+      )}
+      {busy && <Text variant="caption" tone="subtle">{IMPORT_PHASE_LABEL[task.phase]}…</Text>}
+      {task.phase === 'done' && task.songId && (
+        <View style={{ alignItems: 'flex-start' }}>
+          <Button label="Open" size="sm" onPress={() => { dismissImport(task.id); router.push({ pathname: '/song/[id]', params: { id: task.songId!, view: 'overview' } }); }} />
+        </View>
+      )}
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  row: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
-  icon: { width: 28, alignItems: 'center' },
+  card: { gap: spacing.sm, padding: spacing.lg, borderRadius: radius.lg, borderWidth: 1 },
+  head: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', minHeight: 30 },
+  bars: { flexDirection: 'row', gap: 4 },
+  bar: { flex: 1, height: 3, borderRadius: 2 },
+  labels: { flexDirection: 'row', gap: spacing.sm, flexWrap: 'wrap' },
 });

@@ -131,7 +131,12 @@ function shapeAt(shapes: readonly ShapeAtTime[], t: number): string | null {
   return seg && seg.shape !== 'N' ? seg.shape : null;
 }
 
-export function buildFingerstyleTab(shapes: readonly ShapeAtTime[], detectedBeats: readonly number[], pattern: PickPattern): TabBar[] {
+export function buildFingerstyleTab(
+  shapes: readonly ShapeAtTime[],
+  detectedBeats: readonly number[],
+  pattern: PickPattern,
+  openMidi?: readonly number[],
+): TabBar[] {
   if (detectedBeats.length < 5 || !shapes.length) return [];
   const beats = extendBeats(detectedBeats);
   const offset = chooseBarOffset(
@@ -142,7 +147,7 @@ export function buildFingerstyleTab(shapes: readonly ShapeAtTime[], detectedBeat
   const resolve = (shape: string) => {
     if (!voicingCache.has(shape)) {
       const sym = parseChord(shape);
-      const v = sym ? getVoicings(sym)[0] : undefined;
+      const v = sym ? getVoicings(sym, openMidi)[0] : undefined;
       if (!v) return null;
       voicingCache.set(shape, { ...voiceMap(v.frets), frets: v.frets });
     }

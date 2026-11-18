@@ -10,6 +10,8 @@ export interface SeekBarProps {
   duration: number;
   onSeek: (t: number) => void;
   loop?: { start: number; end: number } | null;
+  /** Transport style: times on either side of a thin bar. */
+  inline?: boolean;
 }
 
 /**
@@ -17,7 +19,7 @@ export interface SeekBarProps {
  * forwards) and let go. While dragging, the bar follows your finger and the time preview
  * updates; the song only jumps when you release.
  */
-export function SeekBar({ time, duration, onSeek, loop }: SeekBarProps) {
+export function SeekBar({ time, duration, onSeek, loop, inline = false }: SeekBarProps) {
   const { colors } = useTheme();
   const [width, setWidth] = useState(0);
   const [drag, setDrag] = useState<number | null>(null);
@@ -55,8 +57,7 @@ export function SeekBar({ time, duration, onSeek, loop }: SeekBarProps) {
   const active = drag !== null || hover;
   const x = (t: number) => (duration > 0 ? (t / duration) * width : 0);
 
-  return (
-    <View style={{ gap: 4 }}>
+  const bar = (
       <View
         role="slider"
         accessibilityLabel="Song position"
@@ -69,20 +70,34 @@ export function SeekBar({ time, duration, onSeek, loop }: SeekBarProps) {
         // Web/Windows only: grow the bar and show the handle on hover.
         onMouseEnter={() => setHover(true)}
         onMouseLeave={() => setHover(false)}
-        style={styles.hit}
+        style={[styles.hit, inline && { flex: 1 }]}
       >
-        <View pointerEvents="none" style={[styles.track, { height: active ? 6 : 4, backgroundColor: colors.border }]}>
-          {loop && <View style={[styles.loop, { left: x(loop.start), width: x(loop.end) - x(loop.start), backgroundColor: colors.highlight }]} />}
-          <View style={[styles.fill, { width: `${frac * 100}%`, backgroundColor: active ? colors.accent : colors.text }]} />
+        <View pointerEvents="none" style={[styles.track, { height: active ? 4 : 3, backgroundColor: colors.border }]}>
+          {loop && <View style={[styles.loop, { left: x(loop.start), width: x(loop.end) - x(loop.start), backgroundColor: colors.accent }]} />}
+          <View style={[styles.fill, { width: `${frac * 100}%`, backgroundColor: colors.accent }]} />
         </View>
+        {loop && <View pointerEvents="none" style={[styles.loopBox, { left: x(loop.start), width: Math.max(2, x(loop.end) - x(loop.start)), borderColor: colors.accent }]} />}
         <View
           pointerEvents="none"
           style={[
             styles.thumb,
-            { left: frac * width - 7, backgroundColor: colors.text, opacity: active ? 1 : 0, transform: [{ scale: drag !== null ? 1.2 : 1 }] },
+            { left: frac * width - 6, backgroundColor: colors.text, borderColor: colors.backgroundRaised, transform: [{ scale: drag !== null ? 1.25 : active ? 1.1 : 1 }] },
           ]}
         />
       </View>
+  );
+  if (inline) {
+    return (
+      <View style={styles.inline}>
+        <Text variant="mono" tone={drag !== null ? 'highlight' : 'muted'} style={styles.time}>{formatTime(shown)}</Text>
+        {bar}
+        <Text variant="mono" tone="subtle" style={styles.time}>{formatTime(duration)}</Text>
+      </View>
+    );
+  }
+  return (
+    <View style={{ gap: 4 }}>
+      {bar}
       <View style={styles.times}>
         <Text variant="caption" tone={drag !== null ? 'accent' : 'muted'} style={styles.mono}>{formatTime(shown)}</Text>
         <Text variant="caption" tone="muted" style={styles.mono}>-{formatTime(Math.max(0, duration - shown))}</Text>
@@ -95,8 +110,11 @@ const styles = StyleSheet.create({
   hit: { height: 22, justifyContent: 'center', cursor: 'pointer' } as never,
   track: { borderRadius: 3, overflow: 'hidden', width: '100%' },
   fill: { position: 'absolute', left: 0, top: 0, bottom: 0, borderRadius: 3 },
-  loop: { position: 'absolute', top: 0, bottom: 0, opacity: 0.35 },
-  thumb: { position: 'absolute', width: 14, height: 14, borderRadius: 7, top: 4 },
+  loop: { position: 'absolute', top: 0, bottom: 0, opacity: 0.3 },
+  loopBox: { position: 'absolute', top: 4, bottom: 4, borderWidth: 1, borderRadius: 2, opacity: 0.8 },
+  thumb: { position: 'absolute', width: 12, height: 12, borderRadius: 6, top: 5, borderWidth: 2 },
+  inline: { flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 },
+  time: { fontSize: 12, minWidth: 38, textAlign: 'center' },
   times: { flexDirection: 'row', justifyContent: 'space-between' },
   mono: { fontVariant: ['tabular-nums'], letterSpacing: 0.2 } as never,
 });

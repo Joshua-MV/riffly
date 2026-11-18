@@ -1,4 +1,4 @@
-import { beatsLeft, chordProgress, laneWindow, nextChordTime, previousChordTime } from '../lane';
+import { beatsLeft, chordProgress, laneState, laneWindow, nextChordTime, previousChordTime, strumSlots } from '../lane';
 
 const chords = [
   { start: 0, end: 0.5, label: 'N' },
@@ -34,5 +34,27 @@ describe('chord lane', () => {
   it('skips forward to the next change', () => {
     expect(nextChordTime(chords, 1)).toBe(2.5);
     expect(nextChordTime(chords, 6)).toBeNull();
+  });
+
+  it('tracks the current chord, its beats and the next chord', () => {
+    const s = laneState(chords, beats, 1.2);
+    expect(chords[s.currentIndex].label).toBe('G');
+    expect(chords[s.nextIndex].label).toBe('D');
+    expect(s.beatsTotal).toBe(4);
+    expect(s.beatsLeft).toBe(2); // 1.5 and 2.0 are still to come
+    expect(s.beatIndex).toBe(1);
+    const silence = laneState(chords, beats, 0.2);
+    expect(silence.currentIndex).toBe(-1);
+    expect(chords[silence.nextIndex].label).toBe('G');
+    expect(laneState(chords, beats, 6.4).nextIndex).toBe(-1);
+  });
+
+  it('lays a one-bar strum pattern on the beat grid', () => {
+    const slots = strumSlots(beats, 0, 'D-DU-UDU', 0.4, 2.6);
+    expect(slots.slice(0, 8).map((s) => s.stroke).join('')).toBe('D-DU-UDU');
+    expect(slots[1].t).toBeCloseTo(0.75);
+    expect(slots[0].onBeat).toBe(true);
+    // Bar starting on the second beat: the pattern shifts with it.
+    expect(strumSlots(beats, 1, 'D-DU-UDU', 0.4, 0.9).map((s) => s.stroke)).toEqual(['D', 'U']);
   });
 });

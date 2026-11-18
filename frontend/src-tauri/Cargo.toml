@@ -16,6 +16,7 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]
 cc = "1.11.2"
+cmake = "0.1"
 tauri-build = { version = "2.7.5", features = [] }
 
 [dependencies]
@@ -28,3 +29,5 @@ tauri-plugin-sql = { version = "2", features = ["sqlite"] }
 tauri-plugin-fs = "2"
 tauri-plugin-dialog = "2"
 mp3lame-encoder = "0.3.0"
+# One-time download of the on-device lyrics model (whisper.cpp itself is built by build.rs).
+ureq = "3"
